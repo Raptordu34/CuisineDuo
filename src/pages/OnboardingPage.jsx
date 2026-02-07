@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
 
 export default function OnboardingPage() {
-  const { user, profile, refreshProfile } = useAuth()
+  const { profile, refreshProfile } = useAuth()
+  const { t } = useLanguage()
   const [mode, setMode] = useState(null) // 'create' | 'join'
   const [householdName, setHouseholdName] = useState('')
   const [inviteCode, setInviteCode] = useState('')
@@ -12,7 +14,7 @@ export default function OnboardingPage() {
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
 
-  if (!user) return <Navigate to="/login" replace />
+  if (!profile) return <Navigate to="/login" replace />
   if (profile?.household_id) return <Navigate to="/" replace />
 
   const handleCreate = async (e) => {
@@ -35,7 +37,7 @@ export default function OnboardingPage() {
     const { error: updateErr } = await supabase
       .from('profiles')
       .update({ household_id: household.id })
-      .eq('id', user.id)
+      .eq('id', profile.id)
 
     if (updateErr) {
       setError(updateErr.message)
@@ -58,7 +60,7 @@ export default function OnboardingPage() {
       .single()
 
     if (findErr || !household) {
-      setError('Code introuvable. Verifiez et reessayez.')
+      setError(t('onboarding.codeNotFound'))
       setLoading(false)
       return
     }
@@ -66,7 +68,7 @@ export default function OnboardingPage() {
     const { error: updateErr } = await supabase
       .from('profiles')
       .update({ household_id: household.id })
-      .eq('id', user.id)
+      .eq('id', profile.id)
 
     if (updateErr) {
       setError(updateErr.message)
@@ -82,9 +84,9 @@ export default function OnboardingPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
         <div className="w-full max-w-sm text-center space-y-6">
           <span className="text-5xl">🎉</span>
-          <h1 className="text-2xl font-bold text-gray-900">Foyer cree !</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('onboarding.householdCreated')}</h1>
           <p className="text-gray-500">
-            Partagez ce code avec votre partenaire pour qu'il/elle rejoigne le foyer :
+            {t('onboarding.shareCode')}
           </p>
           <div className="bg-white border-2 border-dashed border-orange-300 rounded-xl p-6">
             <p className="text-3xl font-mono font-bold text-orange-600 tracking-widest">
@@ -95,7 +97,7 @@ export default function OnboardingPage() {
             onClick={() => navigator.clipboard.writeText(createdCode)}
             className="text-sm text-orange-500 hover:text-orange-600 font-medium cursor-pointer"
           >
-            Copier le code
+            {t('onboarding.copyCode')}
           </button>
         </div>
       </div>
@@ -107,8 +109,8 @@ export default function OnboardingPage() {
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
           <span className="text-4xl">🏠</span>
-          <h1 className="mt-2 text-2xl font-bold text-gray-900">Configurez votre foyer</h1>
-          <p className="text-sm text-gray-500">Creez un nouveau foyer ou rejoignez-en un.</p>
+          <h1 className="mt-2 text-2xl font-bold text-gray-900">{t('onboarding.configureHousehold')}</h1>
+          <p className="text-sm text-gray-500">{t('onboarding.configureSubtitle')}</p>
         </div>
 
         {error && (
@@ -121,15 +123,15 @@ export default function OnboardingPage() {
               onClick={() => setMode('create')}
               className="w-full p-4 bg-white rounded-xl border-2 border-gray-200 hover:border-orange-400 text-left transition-colors cursor-pointer"
             >
-              <p className="font-semibold text-gray-900">Creer un foyer</p>
-              <p className="text-sm text-gray-500">Vous etes le premier ? Creez le foyer et invitez votre partenaire.</p>
+              <p className="font-semibold text-gray-900">{t('onboarding.createHousehold')}</p>
+              <p className="text-sm text-gray-500">{t('onboarding.createHouseholdDesc')}</p>
             </button>
             <button
               onClick={() => setMode('join')}
               className="w-full p-4 bg-white rounded-xl border-2 border-gray-200 hover:border-blue-400 text-left transition-colors cursor-pointer"
             >
-              <p className="font-semibold text-gray-900">Rejoindre un foyer</p>
-              <p className="text-sm text-gray-500">Vous avez un code d'invitation ? Entrez-le ici.</p>
+              <p className="font-semibold text-gray-900">{t('onboarding.joinHousehold')}</p>
+              <p className="text-sm text-gray-500">{t('onboarding.joinHouseholdDesc')}</p>
             </button>
           </div>
         )}
@@ -138,7 +140,7 @@ export default function OnboardingPage() {
           <form onSubmit={handleCreate} className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
             <div>
               <label htmlFor="householdName" className="block text-sm font-medium text-gray-700 mb-1">
-                Nom du foyer
+                {t('onboarding.householdName')}
               </label>
               <input
                 id="householdName"
@@ -147,7 +149,7 @@ export default function OnboardingPage() {
                 value={householdName}
                 onChange={(e) => setHouseholdName(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                placeholder="ex: Chez nous"
+                placeholder={t('onboarding.householdNamePlaceholder')}
               />
             </div>
             <button
@@ -155,14 +157,14 @@ export default function OnboardingPage() {
               disabled={loading}
               className="w-full py-2 bg-orange-500 text-white font-medium rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 cursor-pointer"
             >
-              {loading ? 'Creation...' : 'Creer le foyer'}
+              {loading ? t('onboarding.creating') : t('onboarding.createTheHousehold')}
             </button>
             <button
               type="button"
               onClick={() => setMode(null)}
               className="w-full py-2 text-sm text-gray-500 hover:text-gray-700 cursor-pointer"
             >
-              Retour
+              {t('onboarding.back')}
             </button>
           </form>
         )}
@@ -171,7 +173,7 @@ export default function OnboardingPage() {
           <form onSubmit={handleJoin} className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
             <div>
               <label htmlFor="inviteCode" className="block text-sm font-medium text-gray-700 mb-1">
-                Code d'invitation
+                {t('onboarding.inviteCode')}
               </label>
               <input
                 id="inviteCode"
@@ -180,7 +182,7 @@ export default function OnboardingPage() {
                 value={inviteCode}
                 onChange={(e) => setInviteCode(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center font-mono text-lg tracking-widest"
-                placeholder="abc12345"
+                placeholder={t('onboarding.inviteCodePlaceholder')}
               />
             </div>
             <button
@@ -188,14 +190,14 @@ export default function OnboardingPage() {
               disabled={loading}
               className="w-full py-2 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 cursor-pointer"
             >
-              {loading ? 'Recherche...' : 'Rejoindre'}
+              {loading ? t('onboarding.searching') : t('onboarding.join')}
             </button>
             <button
               type="button"
               onClick={() => setMode(null)}
               className="w-full py-2 text-sm text-gray-500 hover:text-gray-700 cursor-pointer"
             >
-              Retour
+              {t('onboarding.back')}
             </button>
           </form>
         )}
