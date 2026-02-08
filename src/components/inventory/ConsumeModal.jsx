@@ -24,7 +24,7 @@ export default function ConsumeModal({ item, onClose, onUpdateFillLevel, onConsu
   const effectiveQty = item.quantity * newLevel
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 pb-16 md:pb-0" onClick={onClose}>
       <div
         className="bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl"
         onClick={(e) => e.stopPropagation()}

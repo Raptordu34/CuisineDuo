@@ -4,13 +4,19 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useNotifications } from '../hooks/useNotifications'
+import { useTasteProfile } from '../hooks/useTasteProfile'
+import TasteProfileDisplay from '../components/recipes/TasteProfileDisplay'
+import StartSessionModal from '../components/swipe/StartSessionModal'
 
 export default function HomePage() {
   const { profile } = useAuth()
   const { t } = useLanguage()
   const navigate = useNavigate()
   const { supported, permission, subscribed, subscribe } = useNotifications()
-  const [stats, setStats] = useState({ inStock: 0, expenses: 0, expiringSoon: 0 })
+  const { userTasteProfile, householdTasteProfiles, ratingsCount, loading: tasteLoading } = useTasteProfile(profile?.id, profile?.household_id)
+  const [stats, setStats] = useState({ inStock: 0, expenses: 0, expiringSoon: 0, recipeCount: 0 })
+  const [showStartSession, setShowStartSession] = useState(false)
+  const [activeSession, setActiveSession] = useState(null)
 
   const showBanner = supported && permission !== 'denied' && !subscribed
 
@@ -43,18 +49,102 @@ export default function HomePage() {
         const purchaseTotal = items.reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0)
         const consumedTotal = consumed ? consumed.reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0) : 0
 
+        const { count: recipeCount } = await supabase
+          .from('recipes')
+          .select('*', { count: 'exact', head: true })
+          .eq('household_id', profile.household_id)
+
         setStats({
           inStock: items.length,
           expenses: (purchaseTotal + consumedTotal).toFixed(2),
           expiringSoon,
+          recipeCount: recipeCount || 0,
         })
       } catch {
         // Tables may not exist yet
       }
     }
 
+    // Check for active swipe session
+    const checkActiveSession = async () => {
+      try {
+        const { data } = await supabase
+          .from('swipe_sessions')
+          .select('id, title, status')
+          .eq('household_id', profile.household_id)
+          .in('status', ['generating', 'voting'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        setActiveSession(data)
+      } catch {
+        // Table may not exist
+      }
+    }
+
     fetchStats()
+    checkActiveSession()
   }, [profile?.household_id])
+
+  const handleCreateSession = async ({ mealCount, mealTypes }) => {
+    if (!profile?.household_id) return
+
+    const title = `${t('swipe.planTitle')} ${new Date().toLocaleDateString()}`
+
+    // Create the session
+    const { data: session, error } = await supabase
+      .from('swipe_sessions')
+      .insert({
+        household_id: profile.household_id,
+        created_by: profile.id,
+        title,
+        meal_count: mealCount,
+        meal_types: mealTypes,
+        status: 'generating',
+      })
+      .select()
+      .single()
+
+    if (error || !session) return
+
+    setShowStartSession(false)
+
+    // Navigate to swipe page
+    navigate(`/swipe/${session.id}`)
+
+    // Fetch context data for AI
+    const [recipesResult, inventoryResult, historyResult, prefsResult] = await Promise.all([
+      supabase.from('recipes').select('id, name, category, description').eq('household_id', profile.household_id),
+      supabase.from('inventory_items').select('name, quantity, unit, estimated_expiry_date, category').eq('household_id', profile.household_id),
+      supabase.from('cooking_history').select('recipe_id, cooked_at, recipes(name)').eq('household_id', profile.household_id).order('cooked_at', { ascending: false }).limit(20),
+      supabase.from('taste_preferences').select('profile_id, notes, profiles(display_name)').in('profile_id', (householdTasteProfiles || []).map(p => p.profileId)),
+    ])
+
+    // Fire and forget the AI generation
+    fetch('/api/generate-swipe-recipes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: session.id,
+        household_id: profile.household_id,
+        meal_count: mealCount,
+        meal_types: mealTypes,
+        lang: 'fr',
+        existing_recipes: recipesResult.data || [],
+        household_taste_profiles: householdTasteProfiles || [],
+        taste_preferences: (prefsResult.data || []).map(p => ({
+          displayName: p.profiles?.display_name || '',
+          notes: p.notes || '',
+        })),
+        cooking_history: (historyResult.data || []).map(h => ({
+          recipe_name: h.recipes?.name || '',
+          cooked_at: h.cooked_at,
+        })),
+        inventory_items: inventoryResult.data || [],
+      }),
+    }).catch(() => {})
+  }
 
   return (
     <div className="space-y-8">
@@ -87,6 +177,16 @@ export default function HomePage() {
       {/* Quick actions grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <DashboardCard
+          icon="🍽️"
+          title={t('home.planMeals')}
+          description={t('home.planMealsDesc')}
+          color="green"
+          onClick={() => activeSession
+            ? navigate(`/swipe/${activeSession.id}${activeSession.status === 'completed' ? '/results' : ''}`)
+            : setShowStartSession(true)
+          }
+        />
+        <DashboardCard
           icon="📸"
           title={t('home.scanReceipt')}
           description={t('home.scanReceiptDesc')}
@@ -94,27 +194,60 @@ export default function HomePage() {
           onClick={() => navigate('/inventory')}
         />
         <DashboardCard
-          icon="📦"
-          title={t('home.inventory')}
-          description={t('home.inventoryDesc')}
+          icon="🛒"
+          title={t('home.shopping')}
+          description={t('home.shoppingDesc')}
           color="blue"
-          onClick={() => navigate('/inventory')}
-        />
-        <DashboardCard
-          icon="💰"
-          title={t('home.budget')}
-          description={t('home.budgetDesc')}
-          color="green"
+          onClick={() => navigate('/shopping')}
         />
       </div>
 
-      {/* Stats placeholder */}
+      {/* Active session banner */}
+      {activeSession && (
+        <button
+          onClick={() => navigate(`/swipe/${activeSession.id}${activeSession.status === 'completed' ? '/results' : ''}`)}
+          className="w-full p-4 bg-green-50 border-2 border-green-200 hover:border-green-400 rounded-xl text-left transition-colors cursor-pointer"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🔥</span>
+            <div>
+              <p className="font-semibold text-gray-900">{t('swipe.activeSession')}</p>
+              <p className="text-sm text-gray-500">{activeSession.title}</p>
+            </div>
+          </div>
+        </button>
+      )}
+
+      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label={t('home.productsInStock')} value={stats.inStock} />
         <StatCard label={t('home.expensesThisMonth')} value={`${stats.expenses}\u00A0\u20AC`} />
         <StatCard label={t('home.expiringNear')} value={stats.expiringSoon} />
-        <StatCard label={t('home.recipesCooked')} value="--" />
+        <StatCard label={t('home.recipesCooked')} value={stats.recipeCount} />
       </div>
+
+      {/* Taste profile */}
+      {!tasteLoading && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+          <h2 className="text-sm font-semibold text-gray-700">{t('taste.title')}</h2>
+          {userTasteProfile ? (
+            <>
+              <TasteProfileDisplay profile={userTasteProfile} mode="user" />
+              <p className="text-xs text-gray-400">{t('recipes.recipesRated', { count: ratingsCount })}</p>
+            </>
+          ) : (
+            <p className="text-sm text-gray-400">{t('recipes.tasteProfileHint')}</p>
+          )}
+        </div>
+      )}
+
+      {/* Start session modal */}
+      {showStartSession && (
+        <StartSessionModal
+          onClose={() => setShowStartSession(false)}
+          onCreate={handleCreateSession}
+        />
+      )}
     </div>
   )
 }

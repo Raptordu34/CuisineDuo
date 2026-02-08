@@ -96,11 +96,15 @@ export default function DictationButton({ onResult, disabled, className = '', co
 
   const colorClasses = color === 'indigo'
     ? 'bg-indigo-500 hover:bg-indigo-600'
-    : 'bg-orange-500 hover:bg-orange-600'
+    : color === 'green'
+      ? 'bg-green-500 hover:bg-green-600'
+      : 'bg-orange-500 hover:bg-orange-600'
 
   const idleClasses = color === 'indigo'
     ? 'bg-gray-100 text-indigo-400 hover:bg-indigo-50'
-    : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+    : color === 'green'
+      ? 'bg-gray-100 text-green-400 hover:bg-green-50'
+      : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
 
   return (
     <div className="relative flex items-center gap-0.5">
