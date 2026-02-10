@@ -13,7 +13,7 @@ export function useUnreadMessages(profile) {
       .select('last_read_at')
       .eq('profile_id', profile.id)
       .eq('household_id', profile.household_id)
-      .single()
+      .maybeSingle()
 
     const lastReadAt = cursor?.last_read_at || '1970-01-01T00:00:00Z'
 

@@ -60,14 +60,20 @@ export default function ChatPage() {
     }
 
     const fetchReactions = async () => {
+      if (!profile?.household_id) return
+      
+      const { data: messagesIds } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('household_id', profile.household_id)
+      
+      if (!messagesIds || messagesIds.length === 0) return
+
       const { data } = await supabase
         .from('message_reactions')
         .select('*')
-        .in('message_id', (await supabase
-          .from('messages')
-          .select('id')
-          .eq('household_id', profile.household_id)
-        ).data?.map(m => m.id) || [])
+        .in('message_id', messagesIds.map(m => m.id))
+      
       if (data) setReactions(data)
     }
 
@@ -110,7 +116,7 @@ export default function ChatPage() {
 
     // Subscribe to reactions
     const reactChannel = supabase
-      .channel(`reactions:${profile.household_id}`)
+      .channel(`reactions_all`) // Pas de filtre direct possible sur une table jointe en Realtime simple
       .on(
         'postgres_changes',
         {
