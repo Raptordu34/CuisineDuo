@@ -304,10 +304,16 @@ export default function ChatPage() {
         author: msg.is_ai ? 'Miam (AI assistant)' : (msg.profiles?.display_name || 'User'),
         content: msg.content,
       }))
-      const res = await fetch('/api/correct-transcription', {
+      const res = await fetch('/api/inventory-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, context: 'chat', lang: dictLang || lang, chatHistory }),
+        body: JSON.stringify({
+          action: 'correct-transcription',
+          text,
+          context: 'chat',
+          lang: dictLang || lang,
+          chatHistory,
+        }),
       })
       if (res.ok) {
         const data = await res.json()

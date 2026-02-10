@@ -122,10 +122,11 @@ export default function HomePage() {
     ])
 
     // Fire and forget the AI generation
-    fetch('/api/generate-swipe-recipes', {
+    fetch('/api/swipe-ai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        action: 'generate-suggestions',
         session_id: session.id,
         household_id: profile.household_id,
         meal_count: mealCount,

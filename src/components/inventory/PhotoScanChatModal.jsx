@@ -32,10 +32,11 @@ export default function PhotoScanChatModal({ items: initialItems, existingInvent
     let cancelled = false
     const init = async () => {
       try {
-        const res = await fetch('/api/scan-photo-inventory', {
+        const res = await fetch('/api/inventory-ai', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            action: 'refine-scan',
             message: null,
             items: initialItems,
             existingInventory: existingInventory.map(i => ({
@@ -81,10 +82,11 @@ export default function PhotoScanChatModal({ items: initialItems, existingInvent
     const newHistory = [...history, { role: 'user', content }]
 
     try {
-      const res = await fetch('/api/scan-photo-inventory', {
+      const res = await fetch('/api/inventory-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'refine-scan',
           message: content,
           items,
           existingInventory: existingInventory.map(i => ({

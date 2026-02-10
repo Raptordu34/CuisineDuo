@@ -364,10 +364,11 @@ export default function InventoryPage() {
     }))
 
     try {
-      const res = await fetch('/api/correct-transcription', {
+      const res = await fetch('/api/inventory-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'correct-transcription',
           text,
           context: 'inventory-update',
           lang: cmdLang || lang,
@@ -437,10 +438,11 @@ export default function InventoryPage() {
     setPendingSearch(null)
 
     try {
-      const res = await fetch('/api/correct-transcription', {
+      const res = await fetch('/api/inventory-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'correct-transcription',
           text: pendingSearch.text,
           context: 'inventory-update-search',
           lang: pendingSearch.lang,

@@ -69,10 +69,10 @@ export default function ScanReceiptButton({ onScanComplete, disabled }) {
     try {
       const { base64, mimeType } = await compressImage(file)
 
-      const res = await fetch('/api/scan-receipt', {
+      const res = await fetch('/api/inventory-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: base64, mimeType, lang, mode: selectedMode || 'auto' }),
+        body: JSON.stringify({ action: 'scan', image: base64, mimeType, lang, mode: selectedMode || 'auto' }),
       })
 
       if (!res.ok) {

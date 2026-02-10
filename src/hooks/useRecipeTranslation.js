@@ -90,10 +90,10 @@ export function useRecipeTranslation(recipe) {
     setIsTranslating(true)
     try {
       const body = recipe.id
-        ? { recipe_id: recipe.id, lang }
-        : { recipe_data: { name: recipe.name, description: recipe.description, ingredients: recipe.ingredients, steps: recipe.steps, tips: recipe.tips, equipment: recipe.equipment }, lang }
+        ? { action: 'translate', recipe_id: recipe.id, lang }
+        : { action: 'translate', recipe_data: { name: recipe.name, description: recipe.description, ingredients: recipe.ingredients, steps: recipe.steps, tips: recipe.tips, equipment: recipe.equipment }, lang }
 
-      const res = await fetch('/api/translate-recipe', {
+      const res = await fetch('/api/recipe-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

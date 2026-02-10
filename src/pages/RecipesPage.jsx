@@ -144,12 +144,12 @@ export default function RecipesPage() {
     }))
 
     try {
-      const res = await fetch('/api/recipe-ai-search', {
+      const res = await fetch('/api/recipe-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'search',
           text,
-          context: 'recipe-search',
           lang: cmdLang || lang,
           recipes: recipeSummaries,
           householdTasteProfiles,
@@ -187,12 +187,12 @@ export default function RecipesPage() {
   const handleSelectSuggestion = useCallback(async (suggestion) => {
     setGeneratingSuggestion(true)
     try {
-      const res = await fetch('/api/recipe-ai-search', {
+      const res = await fetch('/api/recipe-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'generate',
           text: suggestion.name,
-          context: 'recipe-generate',
           lang,
           description: suggestion.description,
           householdTasteProfiles,

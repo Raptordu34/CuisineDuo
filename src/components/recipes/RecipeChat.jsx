@@ -36,10 +36,11 @@ export default function RecipeChat({ recipe, onClose, mode, currentStep, onRecip
     setLoading(true)
 
     try {
-      const res = await fetch('/api/recipe-ai-chat', {
+      const res = await fetch('/api/recipe-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'chat',
           message: content,
           recipe,
           history: messages,

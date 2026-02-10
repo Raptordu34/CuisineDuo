@@ -56,10 +56,11 @@ export default function SwipeResultsPage() {
           .select('id, display_name')
           .eq('household_id', profile.household_id)
 
-        await fetch('/api/create-matched-recipes', {
+        await fetch('/api/swipe-ai', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            action: 'create-final',
             session_id: sessionId,
             matched_recipe_ids: newRecipes.map(r => r.id),
             household_id: profile.household_id,
@@ -90,10 +91,11 @@ export default function SwipeResultsPage() {
         ingredients: r.ai_recipe_data?.ingredients || [],
       }))
 
-      await fetch('/api/generate-shopping-list', {
+      await fetch('/api/inventory-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'generate-shopping-list',
           recipe_ids: recipeIds,
           recipes_data: recipesDataForNew,
           household_id: profile.household_id,

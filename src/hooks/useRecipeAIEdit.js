@@ -30,10 +30,11 @@ export function useRecipeAIEdit({ form, equipment, ingredients, steps, tips, set
     }
 
     try {
-      const res = await fetch('/api/recipe-ai-edit', {
+      const res = await fetch('/api/recipe-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'edit',
           text,
           lang: cmdLang || lang,
           recipe: currentRecipe,
@@ -68,12 +69,13 @@ export function useRecipeAIEdit({ form, equipment, ingredients, steps, tips, set
     setPendingSearch(null)
 
     try {
-      const res = await fetch('/api/recipe-ai-edit', {
+      const res = await fetch('/api/recipe-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'edit',
+          useSearch: true,
           text: pendingSearch.text,
-          context: 'recipe-edit-search',
           lang: pendingSearch.lang,
           recipe: pendingSearch.recipe,
         }),

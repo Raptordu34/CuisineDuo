@@ -41,10 +41,16 @@ export default function ScanReviewModal({ items: initialItems, receiptTotal, onC
     if (!text.trim()) return
     setDictationCorrecting(true)
     try {
-      const res = await fetch('/api/correct-transcription', {
+      const res = await fetch('/api/inventory-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, context: 'scan-correction', lang: dictLang || lang, items }),
+        body: JSON.stringify({
+          action: 'correct-transcription',
+          text,
+          context: 'scan-correction',
+          lang: dictLang || lang,
+          items,
+        }),
       })
       if (res.ok) {
         const data = await res.json()
