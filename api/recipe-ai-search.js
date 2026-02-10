@@ -47,7 +47,8 @@ ${profileLines}`
 1. Search through the existing recipes and find any that match the user's request
 2. Suggest 3 new recipe ideas that match the request (not in the existing list)
 
-The user speaks in "${lang || 'fr'}". Respond in the same language for the summary, relevance_reason, name and description fields.
+The user speaks in "${lang || 'fr'}". Respond in the same language for the summary and relevance_reason fields.
+IMPORTANT: Write suggestion "name" and "description" fields in English, regardless of the user's language.
 
 Existing recipes:
 ${recipeSummary || 'No recipes yet.'}
@@ -78,7 +79,7 @@ ${tasteContext}`,
         model: 'gemini-2.0-flash',
         systemInstruction: `You are a professional chef and recipe creator. Generate a complete, detailed recipe based on the recipe name and description provided. Use Google Search to find authentic, well-reviewed versions of this dish.
 
-The user speaks in "${lang || 'fr'}". Write the recipe in the same language.
+Write the recipe in English. All text content (name, description, ingredient names, step instructions, tip texts, equipment names) MUST be in English.
 
 Return a JSON object with this exact schema:
 {

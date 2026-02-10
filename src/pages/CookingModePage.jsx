@@ -8,6 +8,7 @@ import RecipeChat from '../components/recipes/RecipeChat'
 import CookingCompleteModal from '../components/cooking/CookingCompleteModal'
 import { useTasteProfile } from '../hooks/useTasteProfile'
 import { useCookingHistory } from '../hooks/useCookingHistory'
+import { useRecipeTranslation } from '../hooks/useRecipeTranslation'
 
 export default function CookingModePage() {
   const { id } = useParams()
@@ -24,6 +25,7 @@ export default function CookingModePage() {
   const [showIngredients, setShowIngredients] = useState(false)
   const [showComplete, setShowComplete] = useState(false)
   const { logCook } = useCookingHistory(profile?.household_id)
+  const { recipe: displayRecipe, isTranslating, showPrompt, translate } = useRecipeTranslation(recipe)
 
   // Wake Lock
   useEffect(() => {
@@ -73,12 +75,12 @@ export default function CookingModePage() {
     await supabase.from('recipes').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', id)
   }
 
-  const sortedSteps = recipe?.steps
-    ? [...recipe.steps].sort((a, b) => (a.order || 0) - (b.order || 0))
+  const sortedSteps = displayRecipe?.steps
+    ? [...displayRecipe.steps].sort((a, b) => (a.order || 0) - (b.order || 0))
     : []
 
-  const sortedIngredients = recipe?.ingredients
-    ? [...recipe.ingredients].sort((a, b) => (a.order || 0) - (b.order || 0))
+  const sortedIngredients = displayRecipe?.ingredients
+    ? [...displayRecipe.ingredients].sort((a, b) => (a.order || 0) - (b.order || 0))
     : []
 
   const totalSteps = sortedSteps.length
@@ -143,7 +145,7 @@ export default function CookingModePage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
             </svg>
           </button>
-          <h1 className="text-sm font-medium text-white truncate">{recipe.name}</h1>
+          <h1 className="text-sm font-medium text-white truncate">{displayRecipe?.name || recipe?.name}</h1>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {/* Ingredients toggle */}
@@ -165,6 +167,20 @@ export default function CookingModePage() {
           </span>
         </div>
       </div>
+
+      {/* Translate banner */}
+      {(showPrompt || isTranslating) && (
+        <div className="shrink-0 px-4 py-2 bg-blue-900/50 border-b border-blue-800 flex items-center justify-between gap-3">
+          <p className="text-xs text-blue-300">{t('recipes.translatePrompt')}</p>
+          <button
+            onClick={translate}
+            disabled={isTranslating}
+            className="shrink-0 px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-full transition-colors cursor-pointer disabled:opacity-50"
+          >
+            {isTranslating ? t('recipes.translating') : t('recipes.translateButton')}
+          </button>
+        </div>
+      )}
 
       {/* Ingredients panel */}
       {showIngredients && sortedIngredients.length > 0 && (

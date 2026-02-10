@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useLanguage } from '../../contexts/LanguageContext'
 import DictationButton from '../DictationButton'
 import RecipeEditConfirmModal from './RecipeEditConfirmModal'
 
 export default function RecipeChat({ recipe, onClose, mode, currentStep, onRecipeUpdate, householdTasteProfiles, tasteParams }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -46,6 +47,7 @@ export default function RecipeChat({ recipe, onClose, mode, currentStep, onRecip
           currentStep,
           householdTasteProfiles,
           tasteParams,
+          lang,
         }),
       })
 
@@ -119,15 +121,15 @@ export default function RecipeChat({ recipe, onClose, mode, currentStep, onRecip
 
   const isCooking = mode === 'cooking'
 
-  return (
-    <div className={`fixed z-50 flex flex-col bg-white ${
+  return createPortal(
+    <div className={`fixed flex flex-col bg-white ${
       isCooking
-        ? 'inset-x-0 bottom-0 h-[50vh] rounded-t-2xl shadow-xl border-t border-gray-200'
-        : 'inset-x-0 bottom-0 h-[70vh] rounded-t-2xl shadow-xl border-t border-gray-200 md:inset-auto md:bottom-4 md:right-4 md:w-96 md:h-[500px] md:rounded-2xl md:shadow-xl md:border md:border-gray-200'
+        ? 'z-50 inset-x-0 bottom-0 h-[50dvh] rounded-t-2xl shadow-xl border-t border-gray-200'
+        : 'z-[60] inset-x-0 bottom-0 h-[50dvh] rounded-t-2xl shadow-xl border-t border-gray-200 md:z-50 md:inset-auto md:bottom-4 md:right-4 md:w-96 md:h-[500px] md:rounded-2xl md:shadow-xl md:border md:border-gray-200'
     }`}>
       {/* Header */}
       <div className={`shrink-0 px-4 py-3 border-b border-gray-200 flex items-center justify-between ${
-        isCooking ? 'bg-green-50 rounded-t-2xl' : 'bg-indigo-50 rounded-t-2xl md:rounded-t-2xl'
+        isCooking ? 'bg-green-50 rounded-t-2xl' : 'bg-indigo-50'
       }`}>
         <div className="flex items-center gap-2">
           <span className="text-lg">🤖</span>
@@ -143,7 +145,7 @@ export default function RecipeChat({ recipe, onClose, mode, currentStep, onRecip
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3">
         {messages.length === 0 && (
           <div className="text-center mt-8">
             <p className="text-gray-400 text-sm">{t('recipes.chatPlaceholder')}</p>
@@ -191,14 +193,14 @@ export default function RecipeChat({ recipe, onClose, mode, currentStep, onRecip
       </div>
 
       {/* Input */}
-      <form onSubmit={handleSend} className="shrink-0 px-3 py-2 border-t border-gray-200 flex gap-2 items-end">
+      <form onSubmit={handleSend} className="shrink-0 px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] border-t border-gray-200 flex gap-2 items-center">
         <input
           ref={inputRef}
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder={t('recipes.chatPlaceholder')}
-          className={`flex-1 border border-gray-300 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:border-transparent ${isCooking ? 'focus:ring-green-400' : 'focus:ring-indigo-400'}`}
+          className={`min-w-0 flex-1 border border-gray-300 rounded-full px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:border-transparent ${isCooking ? 'focus:ring-green-400' : 'focus:ring-indigo-400'}`}
         />
         <DictationButton
           onResult={handleDictation}
@@ -209,9 +211,11 @@ export default function RecipeChat({ recipe, onClose, mode, currentStep, onRecip
         <button
           type="submit"
           disabled={!input.trim() || loading}
-          className={`shrink-0 px-4 py-2 text-white rounded-full text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${isCooking ? 'bg-green-500 hover:bg-green-600' : 'bg-indigo-500 hover:bg-indigo-600'}`}
+          className={`shrink-0 w-9 h-9 flex items-center justify-center text-white rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${isCooking ? 'bg-green-500 hover:bg-green-600' : 'bg-indigo-500 hover:bg-indigo-600'}`}
         >
-          {t('chat.send')}
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+            <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
+          </svg>
         </button>
       </form>
 
@@ -224,6 +228,7 @@ export default function RecipeChat({ recipe, onClose, mode, currentStep, onRecip
           onCancel={handleCancelUpdates}
         />
       )}
-    </div>
+    </div>,
+    document.body
   )
 }

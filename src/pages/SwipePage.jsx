@@ -20,8 +20,14 @@ export default function SwipePage() {
     membersProgress,
     loading,
     vote,
+    cancelSession,
     isComplete,
   } = useSwipeSession(sessionId, profile?.id, profile?.household_id)
+
+  const handleCancel = useCallback(async () => {
+    await cancelSession()
+    navigate('/')
+  }, [cancelSession, navigate])
 
   const handleVote = useCallback(async (recipeId, liked) => {
     await vote(recipeId, liked)
@@ -29,10 +35,11 @@ export default function SwipePage() {
     // Send notification if this was the last vote for this member
     if (myVotes.length + 1 >= recipes.length && profile?.household_id) {
       try {
-        await fetch('/api/send-notification', {
+        await fetch('/api/push-notifications', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            action: 'send',
             household_id: profile.household_id,
             sender_profile_id: profile.id,
             title: 'CuisineDuo',
@@ -68,12 +75,33 @@ export default function SwipePage() {
     )
   }
 
+  if (session.status === 'cancelled') {
+    return (
+      <div className="fixed inset-0 bg-gray-900 flex flex-col items-center justify-center gap-4">
+        <p className="text-red-400 text-lg font-medium">{t('swipe.sessionFailed')}</p>
+        <p className="text-gray-500 text-sm">{t('swipe.sessionFailedDesc')}</p>
+        <button
+          onClick={handleExit}
+          className="mt-2 px-6 py-2 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-full transition-colors cursor-pointer"
+        >
+          {t('recipes.back')}
+        </button>
+      </div>
+    )
+  }
+
   if (session.status === 'generating') {
     return (
       <div className="fixed inset-0 bg-gray-900 flex flex-col items-center justify-center gap-4">
         <div className="w-16 h-16 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin" />
         <p className="text-gray-300 text-lg font-medium">{t('swipe.generating')}</p>
         <p className="text-gray-500 text-sm">{t('swipe.generatingDesc')}</p>
+        <button
+          onClick={handleCancel}
+          className="mt-4 px-6 py-2 text-sm text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 rounded-full transition-colors cursor-pointer"
+        >
+          {t('common.cancel')}
+        </button>
       </div>
     )
   }

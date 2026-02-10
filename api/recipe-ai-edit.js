@@ -19,7 +19,9 @@ export default async function handler(req, res) {
 
   const baseInstruction = `You are a voice command interpreter for a recipe editing app. The user dictated voice instructions to modify a recipe being edited. Interpret their instructions and return ONLY the fields that need to change.
 
-The user speaks in "${lang || 'fr'}". Possible instructions include:
+The user speaks in "${lang || 'fr'}". Return all text content (names, instructions, descriptions, tips) in English regardless of the user's language.
+
+Possible instructions include:
 - Changing scalar fields: name, description, category, servings, prep_time, cook_time, difficulty
 - Adding/removing/modifying equipment items
 - Adding/removing/modifying ingredients (name, quantity, unit, optional)

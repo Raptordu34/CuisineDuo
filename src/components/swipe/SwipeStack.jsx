@@ -1,20 +1,18 @@
-import { useState, useRef, useCallback } from 'react'
+import { useRef, useCallback, useState } from 'react'
 import SwipeCard from './SwipeCard'
 
 const SWIPE_THRESHOLD = 100
 
 export default function SwipeStack({ recipes, onVote }) {
-  const [currentIndex, setCurrentIndex] = useState(0)
   const [dragState, setDragState] = useState({ x: 0, y: 0, dragging: false })
   const startPos = useRef(null)
 
-  const currentRecipe = recipes[currentIndex]
-  const nextRecipe = recipes[currentIndex + 1]
+  const currentRecipe = recipes[0]
+  const nextRecipe = recipes[1]
 
   const handleVote = useCallback((liked) => {
     if (!currentRecipe) return
     onVote(currentRecipe.id, liked)
-    setCurrentIndex(prev => prev + 1)
     setDragState({ x: 0, y: 0, dragging: false })
   }, [currentRecipe, onVote])
 

@@ -50,10 +50,11 @@ export function useNotifications() {
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
       })
 
-      await fetch('/api/subscribe-push', {
+      await fetch('/api/push-notifications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'subscribe',
           profile_id: profile.id,
           household_id: profile.household_id,
           subscription: sub.toJSON(),
@@ -76,10 +77,11 @@ export function useNotifications() {
       const sub = await reg.pushManager.getSubscription()
       if (!sub) return
 
-      await fetch('/api/subscribe-push', {
-        method: 'DELETE',
+      await fetch('/api/push-notifications', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'unsubscribe',
           profile_id: profile.id,
           subscription: sub.toJSON(),
         }),

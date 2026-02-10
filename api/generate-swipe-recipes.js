@@ -78,13 +78,13 @@ export default async function handler(req, res) {
   const mealTypesStr = (meal_types || []).join(', ') || 'any'
 
   try {
+    console.log(`[generate-swipe-recipes] Starting generation for session ${session_id}, ${totalSuggestions} suggestions`)
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.0-flash',
       generationConfig: { responseMimeType: 'application/json' },
-      tools: [{ googleSearch: {} }],
       systemInstruction: `You are a meal planning assistant. Generate ${totalSuggestions} recipe suggestions for a household. Mix of existing favorites and new creative ideas.
 
-Language: ${lang || 'fr'}. Respond in that language for name and description.
+Language: English. Write name and description in English.
 
 Meal types requested: ${mealTypesStr}
 ${tasteContext}${preferencesContext}${historyContext}${inventoryContext}${existingContext}
@@ -96,7 +96,7 @@ Rules:
 4. Avoid recipes recently cooked
 5. Respect all household members' taste profiles and allergies
 6. Vary categories (appetizer, main, dessert, soup, salad, etc.)
-7. Search the web for trendy/seasonal recipe ideas
+7. Include trendy/seasonal recipe ideas
 
 Return JSON:
 {
@@ -122,25 +122,38 @@ Return JSON:
     )
 
     const responseText = result.response.text().trim()
-    const jsonStr = responseText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
-    const parsed = JSON.parse(jsonStr)
+    console.log(`[generate-swipe-recipes] Gemini response length: ${responseText.length}`)
+    const parsed = JSON.parse(responseText)
     const suggestions = parsed.suggestions || []
+    console.log(`[generate-swipe-recipes] Parsed ${suggestions.length} suggestions`)
+
+    // Build a map of existing recipe images
+    const existingImageMap = {}
+    if (existing_recipes) {
+      for (const r of existing_recipes) {
+        if (r.id && r.image_url) existingImageMap[r.id] = r.image_url
+      }
+    }
 
     // Insert suggestions into swipe_session_recipes
-    const inserts = suggestions.map((s, i) => ({
-      session_id,
-      recipe_id: s.existing_recipe_id || null,
-      name: s.name,
-      description: s.description || null,
-      category: s.category || null,
-      image_url: s.image_url || null,
-      difficulty: s.difficulty || null,
-      prep_time: s.prep_time || null,
-      cook_time: s.cook_time || null,
-      servings: s.servings || 4,
-      is_existing_recipe: !!s.is_existing,
-      sort_order: i,
-    }))
+    const inserts = suggestions.map((s, i) => {
+      // Reuse image from existing recipe if available
+      const existingImage = s.existing_recipe_id ? existingImageMap[s.existing_recipe_id] : null
+      return {
+        session_id,
+        recipe_id: s.existing_recipe_id || null,
+        name: s.name,
+        description: s.description || null,
+        category: s.category || null,
+        image_url: existingImage || null,
+        difficulty: s.difficulty || null,
+        prep_time: s.prep_time || null,
+        cook_time: s.cook_time || null,
+        servings: s.servings || 4,
+        is_existing_recipe: !!s.is_existing,
+        sort_order: i,
+      }
+    })
 
     // Insert via Supabase REST API
     const insertResp = await fetch(
@@ -158,11 +171,58 @@ Return JSON:
     )
 
     if (!insertResp.ok) {
-      console.error('Failed to insert swipe recipes:', await insertResp.text())
+      const errText = await insertResp.text()
+      console.error(`[generate-swipe-recipes] Failed to insert recipes (${insertResp.status}):`, errText)
+      throw new Error(`Insert failed: ${errText}`)
     }
 
-    // Update session status to 'voting'
-    await fetch(
+    const insertedRecipes = await insertResp.json()
+    console.log(`[generate-swipe-recipes] Inserted ${insertedRecipes.length} recipes into DB`)
+
+    // Generate ALL images BEFORE switching to 'voting'
+    const protocol = req.headers.host?.includes('localhost') ? 'http' : 'https'
+    const baseUrl = `${protocol}://${req.headers.host}`
+    const needImages = insertedRecipes.filter(r => !r.image_url)
+
+    // Process images in batches of 3 for speed
+    const BATCH_SIZE = 3
+    for (let i = 0; i < needImages.length; i += BATCH_SIZE) {
+      const batch = needImages.slice(i, i + BATCH_SIZE)
+      const results = await Promise.allSettled(
+        batch.map(async (recipe) => {
+          const imgResp = await fetch(
+            `${baseUrl}/api/generate-recipe-image`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ recipeName: recipe.name, recipeDescription: recipe.description }),
+            }
+          )
+          const imgData = await imgResp.json()
+          if (imgData.found && imgData.image_url) {
+            await fetch(
+              `${supabaseUrl}/rest/v1/swipe_session_recipes?id=eq.${recipe.id}`,
+              {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type': 'application/json',
+                  apikey: supabaseKey,
+                  Authorization: `Bearer ${supabaseKey}`,
+                },
+                body: JSON.stringify({ image_url: imgData.image_url }),
+              }
+            )
+            console.log(`[generate-swipe-recipes] Image ${i + batch.indexOf(recipe) + 1}/${needImages.length}: "${recipe.name}" OK`)
+          } else {
+            console.log(`[generate-swipe-recipes] Image ${i + batch.indexOf(recipe) + 1}/${needImages.length}: "${recipe.name}" no image`)
+          }
+        })
+      )
+    }
+    console.log(`[generate-swipe-recipes] All images processed`)
+
+    // NOW update session status to 'voting' (all images ready)
+    const patchResp = await fetch(
       `${supabaseUrl}/rest/v1/swipe_sessions?id=eq.${session_id}`,
       {
         method: 'PATCH',
@@ -174,41 +234,7 @@ Return JSON:
         body: JSON.stringify({ status: 'voting', updated_at: new Date().toISOString() }),
       }
     )
-
-    // Try to find images for suggestions without image_url
-    const insertedRecipes = insertResp.ok ? await insertResp.json() : []
-    const needImages = insertedRecipes.filter(r => !r.image_url)
-
-    // Fire and forget image fetching for up to 6 recipes
-    for (const recipe of needImages.slice(0, 6)) {
-      try {
-        const imgResp = await fetch(
-          `https://${req.headers.host}/api/generate-recipe-image`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ recipeName: recipe.name, recipeDescription: recipe.description }),
-          }
-        )
-        const imgData = await imgResp.json()
-        if (imgData.found && imgData.image_url) {
-          await fetch(
-            `${supabaseUrl}/rest/v1/swipe_session_recipes?id=eq.${recipe.id}`,
-            {
-              method: 'PATCH',
-              headers: {
-                'Content-Type': 'application/json',
-                apikey: supabaseKey,
-                Authorization: `Bearer ${supabaseKey}`,
-              },
-              body: JSON.stringify({ image_url: imgData.image_url }),
-            }
-          )
-        }
-      } catch {
-        // Image fetch failed, continue
-      }
-    }
+    console.log(`[generate-swipe-recipes] Session status update: ${patchResp.status}`)
 
     return res.status(200).json({ suggestions: insertedRecipes, count: suggestions.length })
   } catch (error) {

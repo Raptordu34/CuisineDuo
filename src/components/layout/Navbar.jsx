@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useUnreadMessages } from '../../hooks/useUnreadMessages'
 import LanguageSwitcher from '../LanguageSwitcher'
 
 function HomeIcon() {
@@ -43,10 +44,20 @@ function ChatBubbleIcon() {
   )
 }
 
+function UnreadBadge({ count }) {
+  if (!count) return null
+  return (
+    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 leading-none">
+      {count > 9 ? '9+' : count}
+    </span>
+  )
+}
+
 export default function Navbar() {
   const { profile, signOut } = useAuth()
   const { t } = useLanguage()
   const { pathname } = useLocation()
+  const { unreadCount } = useUnreadMessages(profile)
 
   const initial = profile?.display_name?.charAt(0)?.toUpperCase() || '?'
 
@@ -55,7 +66,7 @@ export default function Navbar() {
     { to: '/inventory', label: t('nav.inventory'), Icon: InventoryIcon },
     { to: '/shopping', label: t('nav.shopping'), Icon: ShoppingCartIcon },
     { to: '/recipes', label: t('nav.recipes'), Icon: BookIcon },
-    { to: '/chat', label: t('nav.chat'), Icon: ChatBubbleIcon },
+    { to: '/chat', label: t('nav.chat'), Icon: ChatBubbleIcon, badge: unreadCount },
   ]
 
   const isActive = (to) => to === '/' ? pathname === '/' : pathname.startsWith(to)
@@ -88,15 +99,18 @@ export default function Navbar() {
       {/* Mobile bottom tab bar */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
         <div className="h-16 pb-[env(safe-area-inset-bottom)] flex justify-around items-center">
-          {navItems.map(({ to, label, Icon }) => (
+          {navItems.map(({ to, label, Icon, badge }) => (
             <Link
               key={to}
               to={to}
-              className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${
+              className={`relative flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${
                 isActive(to) ? 'text-orange-500' : 'text-gray-400'
               }`}
             >
-              <Icon />
+              <div className="relative">
+                <Icon />
+                <UnreadBadge count={badge} />
+              </div>
               <span className="text-[10px] font-medium">{label}</span>
             </Link>
           ))}
@@ -112,15 +126,20 @@ export default function Navbar() {
           </Link>
 
           <div className="flex items-center gap-6 text-sm font-medium text-gray-600">
-            {navItems.map(({ to, label }) => (
+            {navItems.map(({ to, label, badge }) => (
               <Link
                 key={to}
                 to={to}
-                className={`hover:text-orange-500 transition-colors ${
+                className={`relative hover:text-orange-500 transition-colors ${
                   isActive(to) ? 'text-orange-500' : ''
                 }`}
               >
                 {label}
+                {badge > 0 && (
+                  <span className="absolute -top-2 -right-4 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 leading-none">
+                    {badge > 9 ? '9+' : badge}
+                  </span>
+                )}
               </Link>
             ))}
           </div>

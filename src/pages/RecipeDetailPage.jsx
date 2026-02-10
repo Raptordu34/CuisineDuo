@@ -12,6 +12,10 @@ import StarRatingInline from '../components/recipes/StarRatingInline'
 import TasteProfileDisplay from '../components/recipes/TasteProfileDisplay'
 import { useTasteProfile } from '../hooks/useTasteProfile'
 import { useShoppingList } from '../hooks/useShoppingList'
+import { useRecipeTranslation } from '../hooks/useRecipeTranslation'
+import { useInventoryMatch } from '../hooks/useInventoryMatch'
+import IngredientAvailability from '../components/recipes/IngredientAvailability'
+import RemoveIngredientsModal from '../components/recipes/RemoveIngredientsModal'
 
 const DIFFICULTY_COLORS = {
   easy: 'bg-green-100 text-green-700',
@@ -34,6 +38,11 @@ export default function RecipeDetailPage() {
   const [addingToList, setAddingToList] = useState(false)
   const { householdTasteProfiles } = useTasteProfile(profile?.id, profile?.household_id)
   const { lists, activeList, createList, addItem } = useShoppingList(profile?.household_id)
+  const { recipe: displayRecipe, isTranslating, showPrompt, translate } = useRecipeTranslation(recipe)
+  const [showRemoveIngredients, setShowRemoveIngredients] = useState(false)
+
+  const sortedIngredientsForMatch = [...(displayRecipe?.ingredients || [])].sort((a, b) => (a.order || 0) - (b.order || 0))
+  const { matches: ingredientMatches, inventoryItems, loading: inventoryLoading } = useInventoryMatch(sortedIngredientsForMatch, profile?.household_id)
 
   const fetchRecipe = useCallback(async () => {
     const { data } = await supabase
@@ -71,6 +80,8 @@ export default function RecipeDetailPage() {
         await supabase.from('recipe_taste_params').delete().eq('recipe_id', recipeId)
       }
     }
+    // Invalidate translation cache
+    await supabase.from('recipe_translations').delete().eq('recipe_id', recipeId)
     setShowEdit(false)
     fetchRecipe()
   }
@@ -96,6 +107,8 @@ export default function RecipeDetailPage() {
         await supabase.from('recipe_taste_params').delete().eq('recipe_id', id)
       }
     }
+    // Invalidate translation cache
+    await supabase.from('recipe_translations').delete().eq('recipe_id', id)
     fetchRecipe()
   }
 
@@ -110,6 +123,35 @@ export default function RecipeDetailPage() {
       else next.add(idx)
       return next
     })
+  }
+
+  const handleRemoveIngredients = async (actions) => {
+    for (const action of actions) {
+      if (action.type === 'consume') {
+        const item = action.item
+        await supabase.from('consumed_items').insert({
+          household_id: item.household_id,
+          name: item.name,
+          brand: item.brand || null,
+          quantity: item.quantity,
+          unit: item.unit,
+          price: item.price,
+          price_per_kg: item.price_per_kg ?? null,
+          price_estimated: item.price_estimated === true,
+          category: item.category,
+          purchase_date: item.purchase_date,
+          store: item.store,
+          notes: item.notes,
+          added_by: item.added_by,
+          consumed_by: profile.id,
+          fill_level: item.fill_level ?? 1,
+        })
+        await supabase.from('inventory_items').delete().eq('id', item.id)
+      } else if (action.type === 'reduce') {
+        const newQty = action.remainingInUnit
+        await supabase.from('inventory_items').update({ quantity: newQty }).eq('id', action.itemId)
+      }
+    }
   }
 
   if (loading) {
@@ -133,8 +175,8 @@ export default function RecipeDetailPage() {
   }
 
   const totalTime = (recipe.prep_time || 0) + (recipe.cook_time || 0)
-  const sortedIngredients = [...(recipe.ingredients || [])].sort((a, b) => (a.order || 0) - (b.order || 0))
-  const sortedSteps = [...(recipe.steps || [])].sort((a, b) => (a.order || 0) - (b.order || 0))
+  const sortedIngredients = [...(displayRecipe.ingredients || [])].sort((a, b) => (a.order || 0) - (b.order || 0))
+  const sortedSteps = [...(displayRecipe.steps || [])].sort((a, b) => (a.order || 0) - (b.order || 0))
 
   return (
     <div className="fixed top-14 bottom-16 left-0 right-0 z-40 flex flex-col bg-gray-50 md:static md:z-auto md:max-w-3xl md:mx-auto md:-mt-8 md:-mb-8 md:h-[calc(100dvh-4rem)]">
@@ -144,7 +186,7 @@ export default function RecipeDetailPage() {
           {recipe.image_url ? (
             <img
               src={recipe.image_url}
-              alt={recipe.name}
+              alt={displayRecipe.name}
               className="w-full h-full object-cover"
               onError={(e) => { e.target.style.display = 'none' }}
             />
@@ -199,13 +241,27 @@ export default function RecipeDetailPage() {
           </div>
         )}
 
+        {/* Translate banner */}
+        {(showPrompt || isTranslating) && (
+          <div className="px-4 py-2 bg-blue-50 border-b border-blue-200 flex items-center justify-between gap-3">
+            <p className="text-xs text-blue-700">{t('recipes.translatePrompt')}</p>
+            <button
+              onClick={translate}
+              disabled={isTranslating}
+              className="shrink-0 px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-full transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {isTranslating ? t('recipes.translating') : t('recipes.translateButton')}
+            </button>
+          </div>
+        )}
+
         {/* Content */}
         <div className="px-4 py-4 space-y-6">
           {/* Title & metadata */}
           <div>
-            <h1 className="text-xl font-bold text-gray-900">{recipe.name}</h1>
-            {recipe.description && (
-              <p className="text-sm text-gray-500 mt-1">{recipe.description}</p>
+            <h1 className="text-xl font-bold text-gray-900">{displayRecipe.name}</h1>
+            {displayRecipe.description && (
+              <p className="text-sm text-gray-500 mt-1">{displayRecipe.description}</p>
             )}
 
             {/* Metadata bar */}
@@ -280,6 +336,19 @@ export default function RecipeDetailPage() {
               </button>
             )}
 
+            {/* Remove from inventory */}
+            {sortedIngredients.length > 0 && ingredientMatches.some(m => m.status !== 'missing') && (
+              <button
+                onClick={() => setShowRemoveIngredients(true)}
+                className="w-full mt-2 px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-full text-sm font-medium transition-colors cursor-pointer flex items-center justify-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5m6 4.125 2.25 2.25m0 0 2.25 2.25M12 13.875l2.25-2.25M12 13.875l-2.25 2.25M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" />
+                </svg>
+                {t('recipes.removeFromInventory')}
+              </button>
+            )}
+
             {/* Time info */}
             {totalTime > 0 && (
               <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
@@ -314,11 +383,11 @@ export default function RecipeDetailPage() {
           </div>
 
           {/* Equipment */}
-          {recipe.equipment?.length > 0 && (
+          {displayRecipe.equipment?.length > 0 && (
             <section>
               <h2 className="text-sm font-semibold text-gray-700 mb-2">{t('recipes.equipment')}</h2>
               <div className="flex flex-wrap gap-1.5">
-                {recipe.equipment.map((eq, i) => (
+                {displayRecipe.equipment.map((eq, i) => (
                   <span key={i} className="px-2.5 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
                     {eq.name}
                   </span>
@@ -330,7 +399,17 @@ export default function RecipeDetailPage() {
           {/* Ingredients */}
           {sortedIngredients.length > 0 && (
             <section>
-              <h2 className="text-sm font-semibold text-gray-700 mb-2">{t('recipes.ingredients')}</h2>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm font-semibold text-gray-700">{t('recipes.ingredients')}</h2>
+                {!inventoryLoading && ingredientMatches.length > 0 && (
+                  <span className="text-xs text-gray-500">
+                    {t('recipes.ingredientsInStock', {
+                      available: ingredientMatches.filter(m => m.status === 'available').length,
+                      total: ingredientMatches.length,
+                    })}
+                  </span>
+                )}
+              </div>
               <div className="space-y-1.5">
                 {sortedIngredients.map((ing, i) => (
                   <label
@@ -343,7 +422,7 @@ export default function RecipeDetailPage() {
                       onChange={() => toggleIngredient(i)}
                       className="rounded text-orange-500 focus:ring-orange-400"
                     />
-                    <span className={`text-sm ${checkedIngredients.has(i) ? 'line-through' : ''}`}>
+                    <span className={`text-sm flex items-center ${checkedIngredients.has(i) ? 'line-through' : ''}`}>
                       <span className="font-medium">{ing.name}</span>
                       {ing.quantity && (
                         <span className="text-gray-500">
@@ -353,6 +432,7 @@ export default function RecipeDetailPage() {
                       {ing.optional && (
                         <span className="text-gray-400 text-xs ml-1">({t('recipes.optional')})</span>
                       )}
+                      <IngredientAvailability match={ingredientMatches[i]} />
                     </span>
                   </label>
                 ))}
@@ -388,11 +468,11 @@ export default function RecipeDetailPage() {
           )}
 
           {/* Tips */}
-          {recipe.tips?.length > 0 && (
+          {displayRecipe.tips?.length > 0 && (
             <section>
               <h2 className="text-sm font-semibold text-gray-700 mb-2">{t('recipes.tips')}</h2>
               <div className="space-y-2">
-                {recipe.tips.map((tip, i) => (
+                {displayRecipe.tips.map((tip, i) => (
                   <div key={i} className="flex gap-2 items-start bg-amber-50 rounded-lg px-3 py-2">
                     <span className="text-amber-500 shrink-0 mt-0.5">💡</span>
                     <p className="text-sm text-gray-700">{tip.text}</p>
@@ -438,6 +518,18 @@ export default function RecipeDetailPage() {
           onSave={handleSave}
           onDelete={handleDelete}
           tasteParams={tasteParams}
+        />
+      )}
+
+      {/* Remove ingredients modal */}
+      {showRemoveIngredients && (
+        <RemoveIngredientsModal
+          recipe={recipe}
+          ingredients={sortedIngredients}
+          matches={ingredientMatches}
+          inventoryItems={inventoryItems}
+          onClose={() => setShowRemoveIngredients(false)}
+          onConfirm={handleRemoveIngredients}
         />
       )}
     </div>

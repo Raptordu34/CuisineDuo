@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const { message, recipe, history, mode, currentStep, householdTasteProfiles, tasteParams } = req.body
+  const { message, recipe, history, mode, currentStep, householdTasteProfiles, tasteParams, lang } = req.body
   if (!message) return res.status(400).json({ error: 'Message required' })
 
   const apiKey = process.env.GEMINI_API_KEY
@@ -78,6 +78,8 @@ Pour _tasteParams : deduis les valeurs a partir des ingredients, du type de plat
 
 REGLE PAR DEFAUT : En cas de doute entre conversation et modification, retourne le JSON de modification. Il vaut mieux proposer une modification que l'utilisateur peut confirmer ou annuler, plutot que de simplement decrire ce qu'il faudrait faire.
 
+IMPORTANT: All recipe content in updates (name, description, ingredient names, step instructions, tip texts, equipment names) MUST be written in English, regardless of the conversation language. Only the "response" and "summary" fields should be in the user's language.
+
 IMPORTANT : Ne mets JAMAIS le JSON dans des blocs de code markdown. Retourne le JSON brut directement.`
 
   let tasteContext = ''
@@ -102,7 +104,7 @@ Utilise ces informations pour adapter tes suggestions si pertinent (ex: si quelq
     model: 'gemini-2.0-flash',
     systemInstruction: `Tu es Miam, un assistant culinaire expert. Tu aides l'utilisateur avec des questions specifiques sur une recette.
 ${recipeContext}${cookingContext}${tasteContext}
-Reponds de facon concise, precise et chaleureuse. Si l'utilisateur parle anglais ou chinois, reponds dans sa langue.
+Reponds de facon concise, precise et chaleureuse. Reponds dans la langue de l'utilisateur (${lang || 'fr'}).
 Tu peux suggerer des substitutions d'ingredients, des variantes, des astuces de cuisson, et repondre a toute question sur la recette.
 ${modificationInstructions}`,
   })

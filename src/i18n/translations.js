@@ -18,6 +18,20 @@ export const translations = {
     'chat.aiError': 'Desole, je n\'ai pas pu repondre.',
     'chat.aiHint': 'Tapez @Miam pour poser une question culinaire',
     'chat.aiPlaceholder': 'Demandez a Miam...',
+    'chat.yesterday': 'Hier',
+    'chat.emptyTitle': 'Bienvenue dans le chat du foyer !',
+    'chat.emptySubtitle': 'Discutez avec votre foyer ou demandez a Miam des idees de repas.',
+    'chat.chipWhatToCook': 'Quoi cuisiner ce soir ?',
+    'chat.chipExpiring': 'Produits qui periment bientot',
+    'chat.chipQuickMeal': 'Repas rapide',
+    'chat.chipLeftovers': 'Utiliser les restes',
+    'chat.chipMealPlan': 'Planifier la semaine',
+    'chat.reply': 'Repondre',
+    'chat.copy': 'Copier',
+    'chat.delete': 'Supprimer',
+    'chat.copied': 'Copie !',
+    'chat.react': 'Reagir',
+    'chat.replyingTo': 'Reponse a',
 
     // Login
     'login.whoIsIt': 'Qui est-ce ?',
@@ -131,6 +145,10 @@ export const translations = {
     'inventory.searchReason': 'Raison',
     'inventory.allowSearch': 'Autoriser',
     'inventory.noUpdates': 'Aucune modification detectee',
+    'inventory.smartScan': 'Scan intelligent',
+    'inventory.alreadyInStock': 'Deja en stock',
+    'inventory.chatPlaceholder': 'Ex: retire le lait, change la quantite...',
+    'inventory.aiDetected': 'Produits detectes par l\'IA',
 
     // Fill levels
     'fillLevel.full': 'Plein',
@@ -345,6 +363,18 @@ export const translations = {
     // Recipes - shopping list
     'recipes.addToShoppingList': 'Ajouter a la liste de courses',
 
+    // Recipes - inventory matching
+    'recipes.ingredientsInStock': '{{available}}/{{total}} en stock',
+    'recipes.inStock': 'En stock',
+    'recipes.partialStock': 'Stock partiel',
+    'recipes.notInStock': 'Pas en stock',
+    'recipes.removeFromInventory': 'Retirer de l\'inventaire',
+    'recipes.removeIngredientsTitle': 'Retirer les ingredients',
+    'recipes.servingsCooked': 'Portions cuisinees',
+    'recipes.willConsume': 'Sera entierement consomme',
+    'recipes.willRemain': 'reste',
+    'recipes.confirmRemoval': 'Retirer ({{count}})',
+
     // Cooking history
     'cooking.complete': 'Cuisine terminee !',
     'cooking.completeDesc': 'Sauvegardez cette session dans votre historique.',
@@ -396,9 +426,17 @@ export const translations = {
     'swipe.votingDoneNotif': '{{name}} a fini de voter !',
     'swipe.recipesCreatedNotif': 'Les recettes et la liste de courses sont pretes !',
     'swipe.allVotedNotif': 'Tout le monde a vote ! Decouvrez vos matchs !',
+    'swipe.sessionFailed': 'La generation a echoue',
+    'swipe.sessionFailedDesc': 'Une erreur est survenue lors de la creation des suggestions. Reessayez.',
+
+    // Translation
+    'recipes.translatePrompt': 'Cette recette est en anglais. Traduire ?',
+    'recipes.translateButton': 'Traduire',
+    'recipes.translating': 'Traduction...',
 
     // Common
     'common.loading': 'Chargement...',
+    'common.cancel': 'Annuler',
   },
 
   en: {
@@ -420,6 +458,20 @@ export const translations = {
     'chat.aiError': 'Sorry, I couldn\'t respond.',
     'chat.aiHint': 'Type @Miam to ask a cooking question',
     'chat.aiPlaceholder': 'Ask Miam...',
+    'chat.yesterday': 'Yesterday',
+    'chat.emptyTitle': 'Welcome to the household chat!',
+    'chat.emptySubtitle': 'Chat with your household or ask Miam for meal ideas.',
+    'chat.chipWhatToCook': 'What to cook tonight?',
+    'chat.chipExpiring': 'Products expiring soon',
+    'chat.chipQuickMeal': 'Quick meal',
+    'chat.chipLeftovers': 'Use leftovers',
+    'chat.chipMealPlan': 'Plan the week',
+    'chat.reply': 'Reply',
+    'chat.copy': 'Copy',
+    'chat.delete': 'Delete',
+    'chat.copied': 'Copied!',
+    'chat.react': 'React',
+    'chat.replyingTo': 'Replying to',
 
     // Login
     'login.whoIsIt': 'Who is this?',
@@ -533,6 +585,10 @@ export const translations = {
     'inventory.searchReason': 'Reason',
     'inventory.allowSearch': 'Allow',
     'inventory.noUpdates': 'No changes detected',
+    'inventory.smartScan': 'Smart scan',
+    'inventory.alreadyInStock': 'Already in stock',
+    'inventory.chatPlaceholder': 'E.g.: remove the milk, change quantity...',
+    'inventory.aiDetected': 'Products detected by AI',
 
     // Fill levels
     'fillLevel.full': 'Full',
@@ -747,6 +803,18 @@ export const translations = {
     // Recipes - shopping list
     'recipes.addToShoppingList': 'Add to shopping list',
 
+    // Recipes - inventory matching
+    'recipes.ingredientsInStock': '{{available}}/{{total}} in stock',
+    'recipes.inStock': 'In stock',
+    'recipes.partialStock': 'Partial stock',
+    'recipes.notInStock': 'Not in stock',
+    'recipes.removeFromInventory': 'Remove from inventory',
+    'recipes.removeIngredientsTitle': 'Remove ingredients',
+    'recipes.servingsCooked': 'Servings cooked',
+    'recipes.willConsume': 'Will be fully consumed',
+    'recipes.willRemain': 'remaining',
+    'recipes.confirmRemoval': 'Remove ({{count}})',
+
     // Cooking history
     'cooking.complete': 'Cooking complete!',
     'cooking.completeDesc': 'Save this session to your history.',
@@ -798,9 +866,17 @@ export const translations = {
     'swipe.votingDoneNotif': '{{name}} finished voting!',
     'swipe.recipesCreatedNotif': 'Recipes and shopping list are ready!',
     'swipe.allVotedNotif': 'Everyone voted! Check out your matches!',
+    'swipe.sessionFailed': 'Generation failed',
+    'swipe.sessionFailedDesc': 'An error occurred while creating suggestions. Please try again.',
+
+    // Translation
+    'recipes.translatePrompt': 'Translate this recipe?',
+    'recipes.translateButton': 'Translate',
+    'recipes.translating': 'Translating...',
 
     // Common
     'common.loading': 'Loading...',
+    'common.cancel': 'Cancel',
   },
 
   zh: {
@@ -822,6 +898,20 @@ export const translations = {
     'chat.aiError': '\u62b1\u6b49\uff0c\u65e0\u6cd5\u56de\u590d\u3002',
     'chat.aiHint': '\u8f93\u5165@Miam\u63d0\u95ee',
     'chat.aiPlaceholder': '\u95ee Miam...',
+    'chat.yesterday': '\u6628\u5929',
+    'chat.emptyTitle': '\u6b22\u8fce\u6765\u5230\u5bb6\u5ead\u804a\u5929\uff01',
+    'chat.emptySubtitle': '\u4e0e\u5bb6\u4eba\u804a\u5929\u6216\u5411Miam\u8be2\u95ee\u9910\u98df\u5efa\u8bae\u3002',
+    'chat.chipWhatToCook': '\u4eca\u665a\u5403\u4ec0\u4e48\uff1f',
+    'chat.chipExpiring': '\u5373\u5c06\u8fc7\u671f\u7684\u4ea7\u54c1',
+    'chat.chipQuickMeal': '\u5feb\u624b\u83dc',
+    'chat.chipLeftovers': '\u5229\u7528\u5269\u83dc',
+    'chat.chipMealPlan': '\u8ba1\u5212\u672c\u5468\u9910\u98df',
+    'chat.reply': '\u56de\u590d',
+    'chat.copy': '\u590d\u5236',
+    'chat.delete': '\u5220\u9664',
+    'chat.copied': '\u5df2\u590d\u5236\uff01',
+    'chat.react': '\u53cd\u5e94',
+    'chat.replyingTo': '\u56de\u590d',
 
     // Login
     'login.whoIsIt': '\u4f60\u662f\u8c01\uff1f',
@@ -935,6 +1025,10 @@ export const translations = {
     'inventory.searchReason': '\u539f\u56e0',
     'inventory.allowSearch': '\u5141\u8bb8',
     'inventory.noUpdates': '\u672a\u68c0\u6d4b\u5230\u4fee\u6539',
+    'inventory.smartScan': '\u667a\u80fd\u626b\u63cf',
+    'inventory.alreadyInStock': '\u5df2\u6709\u5e93\u5b58',
+    'inventory.chatPlaceholder': '\u4f8b\u5982\uff1a\u53bb\u6389\u725b\u5976\uff0c\u4fee\u6539\u6570\u91cf...',
+    'inventory.aiDetected': 'AI\u68c0\u6d4b\u5230\u7684\u4ea7\u54c1',
 
     // Fill levels
     'fillLevel.full': '\u6ee1',
@@ -1149,6 +1243,18 @@ export const translations = {
     // Recipes - shopping list
     'recipes.addToShoppingList': '\u6dfb\u52a0\u5230\u8d2d\u7269\u6e05\u5355',
 
+    // Recipes - inventory matching
+    'recipes.ingredientsInStock': '{{available}}/{{total}} \u6709\u5e93\u5b58',
+    'recipes.inStock': '\u6709\u5e93\u5b58',
+    'recipes.partialStock': '\u90e8\u5206\u6709\u5e93\u5b58',
+    'recipes.notInStock': '\u65e0\u5e93\u5b58',
+    'recipes.removeFromInventory': '\u4ece\u5e93\u5b58\u4e2d\u79fb\u9664',
+    'recipes.removeIngredientsTitle': '\u79fb\u9664\u98df\u6750',
+    'recipes.servingsCooked': '\u70f9\u996a\u4efd\u6570',
+    'recipes.willConsume': '\u5c06\u5b8c\u5168\u6d88\u8017',
+    'recipes.willRemain': '\u5269\u4f59',
+    'recipes.confirmRemoval': '\u79fb\u9664 ({{count}})',
+
     // Cooking history
     'cooking.complete': '\u70f9\u996a\u5b8c\u6210\uff01',
     'cooking.completeDesc': '\u5c06\u6b64\u6b21\u70f9\u996a\u4fdd\u5b58\u5230\u5386\u53f2\u8bb0\u5f55\u3002',
@@ -1200,8 +1306,16 @@ export const translations = {
     'swipe.votingDoneNotif': '{{name}} \u5df2\u5b8c\u6210\u6295\u7968\uff01',
     'swipe.recipesCreatedNotif': '\u98df\u8c31\u548c\u8d2d\u7269\u6e05\u5355\u5df2\u51c6\u5907\u597d\uff01',
     'swipe.allVotedNotif': '\u6240\u6709\u4eba\u90fd\u6295\u7968\u4e86\uff01\u67e5\u770b\u60a8\u7684\u5339\u914d\uff01',
+    'swipe.sessionFailed': '\u751f\u6210\u5931\u8d25',
+    'swipe.sessionFailedDesc': '\u521b\u5efa\u5efa\u8bae\u65f6\u51fa\u9519\u3002\u8bf7\u91cd\u8bd5\u3002',
+
+    // Translation
+    'recipes.translatePrompt': '\u8fd9\u4e2a\u98df\u8c31\u662f\u82f1\u6587\u7684\u3002\u7ffb\u8bd1\uff1f',
+    'recipes.translateButton': '\u7ffb\u8bd1',
+    'recipes.translating': '\u7ffb\u8bd1\u4e2d...',
 
     // Common
     'common.loading': '\u52a0\u8f7d\u4e2d...',
+    'common.cancel': '\u53d6\u6d88',
   },
 }

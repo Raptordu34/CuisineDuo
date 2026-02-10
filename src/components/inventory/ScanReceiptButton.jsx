@@ -82,7 +82,7 @@ export default function ScanReceiptButton({ onScanComplete, disabled }) {
 
       const data = await res.json()
       if (data.items && data.items.length > 0) {
-        onScanComplete(data.items, data.receipt_total ?? null)
+        onScanComplete(data.items, data.receipt_total ?? null, selectedMode || 'auto', { base64, mimeType })
       } else {
         alert(t('inventory.scanNoItems'))
       }

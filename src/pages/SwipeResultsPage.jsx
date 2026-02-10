@@ -10,7 +10,7 @@ export default function SwipeResultsPage() {
   const { sessionId } = useParams()
   const navigate = useNavigate()
   const { profile } = useAuth()
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
 
   const { session, recipes, matches, members, votes, loading } = useSwipeSession(
     sessionId,
@@ -63,7 +63,7 @@ export default function SwipeResultsPage() {
             session_id: sessionId,
             matched_recipe_ids: newRecipes.map(r => r.id),
             household_id: profile.household_id,
-            lang: 'fr',
+            lang,
             taste_profiles: tasteProfiles?.map(p => ({
               displayName: p.display_name,
               tasteProfile: {},
@@ -99,7 +99,7 @@ export default function SwipeResultsPage() {
           household_id: profile.household_id,
           list_name: session?.title || t('swipe.shoppingListName'),
           session_id: sessionId,
-          lang: 'fr',
+          lang,
           inventory_items: inventory || [],
           created_by: profile.id,
         }),
@@ -107,10 +107,11 @@ export default function SwipeResultsPage() {
 
       // Send notification
       try {
-        await fetch('/api/send-notification', {
+        await fetch('/api/push-notifications', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            action: 'send',
             household_id: profile.household_id,
             sender_profile_id: profile.id,
             title: 'CuisineDuo',

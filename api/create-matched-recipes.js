@@ -65,7 +65,7 @@ export default async function handler(req, res) {
         generationConfig: { maxOutputTokens: 2000 },
         systemInstruction: `You are a professional chef. Generate a complete recipe based on the name and description provided. Use Google Search for authentic versions.
 
-Language: ${lang || 'fr'}. Write recipe in that language.
+Write the recipe in English. All text content (name, description, ingredient names, step instructions, tip texts, equipment names) MUST be in English.
 ${tasteContext}
 
 Return JSON:

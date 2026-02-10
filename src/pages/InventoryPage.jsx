@@ -9,6 +9,7 @@ import EditItemModal from '../components/inventory/EditItemModal'
 import ConsumeModal from '../components/inventory/ConsumeModal'
 import ScanReceiptButton from '../components/inventory/ScanReceiptButton'
 import ScanReviewModal from '../components/inventory/ScanReviewModal'
+import PhotoScanChatModal from '../components/inventory/PhotoScanChatModal'
 import DictationButton from '../components/DictationButton'
 import DictationTrace from '../components/DictationTrace'
 import InventoryUpdateConfirmModal from '../components/inventory/InventoryUpdateConfirmModal'
@@ -42,6 +43,7 @@ export default function InventoryPage() {
   const [consumingItem, setConsumingItem] = useState(null)
   const [scanResults, setScanResults] = useState(null)
   const [receiptTotal, setReceiptTotal] = useState(null)
+  const [scanMode, setScanMode] = useState(null)
 
   // Selection mode
   const [selectionMode, setSelectionMode] = useState(false)
@@ -162,9 +164,10 @@ export default function InventoryPage() {
     setConsumingItem(null)
   }
 
-  const handleScanComplete = (scannedItems, scanReceiptTotal) => {
+  const handleScanComplete = (scannedItems, scanReceiptTotal, mode) => {
     setScanResults(scannedItems)
     setReceiptTotal(scanReceiptTotal ?? null)
+    setScanMode(mode || null)
   }
 
   // Splitting at scan
@@ -645,11 +648,21 @@ export default function InventoryPage() {
         />
       )}
 
-      {scanResults && (
+      {scanResults && scanMode === 'photo' && (
+        <PhotoScanChatModal
+          items={scanResults}
+          existingInventory={items}
+          onClose={() => { setScanResults(null); setReceiptTotal(null); setScanMode(null) }}
+          onConfirm={(selectedItems) => { handleScanConfirm(selectedItems); setScanMode(null) }}
+          lang={lang}
+        />
+      )}
+
+      {scanResults && scanMode !== 'photo' && (
         <ScanReviewModal
           items={scanResults}
           receiptTotal={receiptTotal}
-          onClose={() => { setScanResults(null); setReceiptTotal(null) }}
+          onClose={() => { setScanResults(null); setReceiptTotal(null); setScanMode(null) }}
           onConfirm={handleScanConfirm}
         />
       )}

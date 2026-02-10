@@ -10,7 +10,7 @@ import StartSessionModal from '../components/swipe/StartSessionModal'
 
 export default function HomePage() {
   const { profile } = useAuth()
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const navigate = useNavigate()
   const { supported, permission, subscribed, subscribe } = useNotifications()
   const { userTasteProfile, householdTasteProfiles, ratingsCount, loading: tasteLoading } = useTasteProfile(profile?.id, profile?.household_id)
@@ -115,7 +115,7 @@ export default function HomePage() {
 
     // Fetch context data for AI
     const [recipesResult, inventoryResult, historyResult, prefsResult] = await Promise.all([
-      supabase.from('recipes').select('id, name, category, description').eq('household_id', profile.household_id),
+      supabase.from('recipes').select('id, name, category, description, image_url').eq('household_id', profile.household_id),
       supabase.from('inventory_items').select('name, quantity, unit, estimated_expiry_date, category').eq('household_id', profile.household_id),
       supabase.from('cooking_history').select('recipe_id, cooked_at, recipes(name)').eq('household_id', profile.household_id).order('cooked_at', { ascending: false }).limit(20),
       supabase.from('taste_preferences').select('profile_id, notes, profiles(display_name)').in('profile_id', (householdTasteProfiles || []).map(p => p.profileId)),
@@ -130,7 +130,7 @@ export default function HomePage() {
         household_id: profile.household_id,
         meal_count: mealCount,
         meal_types: mealTypes,
-        lang: 'fr',
+        lang,
         existing_recipes: recipesResult.data || [],
         household_taste_profiles: householdTasteProfiles || [],
         taste_preferences: (prefsResult.data || []).map(p => ({
@@ -204,18 +204,36 @@ export default function HomePage() {
 
       {/* Active session banner */}
       {activeSession && (
-        <button
-          onClick={() => navigate(`/swipe/${activeSession.id}${activeSession.status === 'completed' ? '/results' : ''}`)}
-          className="w-full p-4 bg-green-50 border-2 border-green-200 hover:border-green-400 rounded-xl text-left transition-colors cursor-pointer"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">🔥</span>
-            <div>
-              <p className="font-semibold text-gray-900">{t('swipe.activeSession')}</p>
-              <p className="text-sm text-gray-500">{activeSession.title}</p>
+        <div className="relative w-full p-4 bg-green-50 border-2 border-green-200 rounded-xl">
+          <button
+            onClick={() => navigate(`/swipe/${activeSession.id}${activeSession.status === 'completed' ? '/results' : ''}`)}
+            className="w-full text-left cursor-pointer"
+          >
+            <div className="flex items-center gap-3 pr-8">
+              <span className="text-2xl">🔥</span>
+              <div>
+                <p className="font-semibold text-gray-900">{t('swipe.activeSession')}</p>
+                <p className="text-sm text-gray-500">{activeSession.title}</p>
+              </div>
             </div>
-          </div>
-        </button>
+          </button>
+          <button
+            onClick={async (e) => {
+              e.stopPropagation()
+              await supabase
+                .from('swipe_sessions')
+                .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+                .eq('id', activeSession.id)
+              setActiveSession(null)
+            }}
+            className="absolute top-3 right-3 w-7 h-7 rounded-full bg-gray-200 hover:bg-red-100 text-gray-500 hover:text-red-500 flex items-center justify-center transition-colors cursor-pointer"
+            title={t('common.cancel')}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       )}
 
       {/* Stats */}

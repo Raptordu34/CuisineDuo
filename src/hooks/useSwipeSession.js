@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 export function useSwipeSession(sessionId, profileId, householdId) {
@@ -7,6 +7,7 @@ export function useSwipeSession(sessionId, profileId, householdId) {
   const [votes, setVotes] = useState([])
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
+  const statusRef = useRef(null)
 
   const fetchAll = useCallback(async () => {
     if (!sessionId) {
@@ -15,44 +16,45 @@ export function useSwipeSession(sessionId, profileId, householdId) {
     }
 
     try {
-      // Fetch session
-      const { data: sessionData } = await supabase
-        .from('swipe_sessions')
-        .select('*')
-        .eq('id', sessionId)
-        .single()
-
-      setSession(sessionData)
-
-      // Fetch recipes
-      const { data: recipesData } = await supabase
-        .from('swipe_session_recipes')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('sort_order', { ascending: true })
-
-      setRecipes(recipesData || [])
-
-      // Fetch votes
-      if (recipesData && recipesData.length > 0) {
-        const recipeIds = recipesData.map(r => r.id)
-        const { data: votesData } = await supabase
-          .from('swipe_votes')
+      // Fetch session + recipes in parallel
+      const [sessionResult, recipesResult] = await Promise.all([
+        supabase
+          .from('swipe_sessions')
           .select('*')
-          .in('session_recipe_id', recipeIds)
+          .eq('id', sessionId)
+          .single(),
+        supabase
+          .from('swipe_session_recipes')
+          .select('*')
+          .eq('session_id', sessionId)
+          .order('sort_order', { ascending: true }),
+      ])
 
-        setVotes(votesData || [])
-      }
+      const sessionData = sessionResult.data
+      const recipesData = recipesResult.data || []
 
-      // Fetch household members
-      if (sessionData?.household_id) {
-        const { data: membersData } = await supabase
-          .from('profiles')
-          .select('id, display_name')
-          .eq('household_id', sessionData.household_id)
+      // Fetch votes + members in parallel
+      const [votesResult, membersResult] = await Promise.all([
+        recipesData.length > 0
+          ? supabase
+              .from('swipe_votes')
+              .select('*')
+              .in('session_recipe_id', recipesData.map(r => r.id))
+          : { data: [] },
+        sessionData?.household_id
+          ? supabase
+              .from('profiles')
+              .select('id, display_name')
+              .eq('household_id', sessionData.household_id)
+          : { data: [] },
+      ])
 
-        setMembers(membersData || [])
-      }
+      // Update all states together to avoid partial renders
+      statusRef.current = sessionData?.status
+      setSession(sessionData)
+      setRecipes(recipesData)
+      setVotes(votesResult.data || [])
+      setMembers(membersResult.data || [])
     } catch {
       // Tables may not exist yet
     } finally {
@@ -63,6 +65,29 @@ export function useSwipeSession(sessionId, profileId, householdId) {
   useEffect(() => {
     fetchAll()
   }, [fetchAll])
+
+  // Realtime on recipe updates (e.g. images loaded in background)
+  useEffect(() => {
+    if (!sessionId || recipes.length === 0) return
+
+    const channel = supabase
+      .channel(`swipe-recipes-${sessionId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'swipe_session_recipes' },
+        (payload) => {
+          const updated = payload.new
+          if (updated?.session_id === sessionId) {
+            setRecipes(prev => prev.map(r => r.id === updated.id ? { ...r, ...updated } : r))
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [sessionId, recipes.length])
 
   // Realtime on votes
   useEffect(() => {
@@ -107,10 +132,11 @@ export function useSwipeSession(sessionId, profileId, householdId) {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'swipe_sessions', filter: `id=eq.${sessionId}` },
         (payload) => {
-          setSession(payload.new)
-          // Refetch recipes when status changes to 'voting'
-          if (payload.new?.status === 'voting' && payload.old?.status === 'generating') {
+          if (payload.new?.status === 'voting' && statusRef.current === 'generating') {
             fetchAll()
+          } else {
+            setSession(payload.new)
+            statusRef.current = payload.new?.status
           }
         }
       )
@@ -120,6 +146,27 @@ export function useSwipeSession(sessionId, profileId, householdId) {
       supabase.removeChannel(channel)
     }
   }, [sessionId, fetchAll])
+
+  // Polling fallback while generating (every 2s)
+  useEffect(() => {
+    if (!sessionId || statusRef.current !== 'generating') return
+    if (session?.status !== 'generating') return
+
+    const interval = setInterval(async () => {
+      const { data } = await supabase
+        .from('swipe_sessions')
+        .select('status')
+        .eq('id', sessionId)
+        .single()
+
+      if (data && data.status !== 'generating') {
+        clearInterval(interval)
+        fetchAll()
+      }
+    }, 2000)
+
+    return () => clearInterval(interval)
+  }, [sessionId, session?.status, fetchAll])
 
   // Derived state
   const myVotes = votes.filter(v => v.profile_id === profileId)
@@ -176,6 +223,16 @@ export function useSwipeSession(sessionId, profileId, householdId) {
     return data
   }, [profileId])
 
+  const cancelSession = useCallback(async () => {
+    if (!sessionId) return
+    await supabase
+      .from('swipe_sessions')
+      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .eq('id', sessionId)
+    statusRef.current = 'cancelled'
+    setSession(prev => prev ? { ...prev, status: 'cancelled' } : prev)
+  }, [sessionId])
+
   return {
     session,
     recipes,
@@ -188,6 +245,7 @@ export function useSwipeSession(sessionId, profileId, householdId) {
     membersProgress,
     loading,
     vote,
+    cancelSession,
     isComplete,
     refetch: fetchAll,
   }
