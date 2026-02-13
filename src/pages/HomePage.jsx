@@ -48,8 +48,8 @@ export default function HomePage() {
           expenses: (purchaseTotal + consumedTotal).toFixed(2),
           expiringSoon,
         })
-      } catch {
-        // Tables may not exist yet
+      } catch (err) {
+        console.error('Failed to fetch dashboard stats:', err)
       }
     }
 
