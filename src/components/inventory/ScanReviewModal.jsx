@@ -63,7 +63,7 @@ export default function ScanReviewModal({ items: initialItems, receiptTotal, onC
     } finally {
       setDictationCorrecting(false)
     }
-  }, [lang, items])
+  }, [lang, items, t])
 
   const handleConfirm = async () => {
     if (saving || selectedCount === 0) return

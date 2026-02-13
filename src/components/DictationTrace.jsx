@@ -1,24 +1,27 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useLanguage } from '../contexts/LanguageContext'
 
 export default function DictationTrace({ trace }) {
   const { t } = useLanguage()
   const [expanded, setExpanded] = useState(false)
-  const collapseTimer = useRef(null)
+  const [prevTrace, setPrevTrace] = useState(trace)
+
+  // Expand when trace changes (React-recommended pattern for derived state)
+  if (trace !== prevTrace) {
+    setPrevTrace(trace)
+    if (trace) setExpanded(true)
+  }
 
   useEffect(() => {
     if (!trace) return
-    setExpanded(true)
 
-    if (collapseTimer.current) clearTimeout(collapseTimer.current)
-    collapseTimer.current = setTimeout(() => {
+    // Auto-collapse after 10 seconds
+    const timer = setTimeout(() => {
       setExpanded(false)
     }, 10000)
 
-    return () => {
-      if (collapseTimer.current) clearTimeout(collapseTimer.current)
-    }
-  }, [trace?.timestamp])
+    return () => clearTimeout(timer)
+  }, [trace])
 
   if (!trace) return null
 

@@ -9,6 +9,7 @@ export default function DictationButton({ onResult, disabled, className = '', co
   const { t, lang: appLang } = useLanguage()
   const { isListening, transcript, startListening, stopListening, isSupported, error } = useDictation()
   const [dictLang, setDictLang] = useState(appLang)
+  const [isHoldMode, setIsHoldMode] = useState(false)
   const lastTranscriptRef = useRef('')
   const pointerDownTimeRef = useRef(0)
   const isHoldModeRef = useRef(false)
@@ -16,7 +17,9 @@ export default function DictationButton({ onResult, disabled, className = '', co
   const dictLangRef = useRef(dictLang)
 
   // Keep ref in sync for use in the onResult effect
-  dictLangRef.current = dictLang
+  useEffect(() => {
+    dictLangRef.current = dictLang
+  }, [dictLang])
 
   useEffect(() => {
     if (!isListening && lastTranscriptRef.current) {
@@ -48,10 +51,12 @@ export default function DictationButton({ onResult, disabled, className = '', co
     e.preventDefault()
     pointerDownTimeRef.current = Date.now()
     isHoldModeRef.current = false
+    setIsHoldMode(false)
 
     holdTimerRef.current = setTimeout(() => {
       if (!isListening) {
         isHoldModeRef.current = true
+        setIsHoldMode(true)
         doStartListening()
       }
     }, 300)
@@ -73,6 +78,7 @@ export default function DictationButton({ onResult, disabled, className = '', co
         stopListening()
       } else {
         isHoldModeRef.current = false
+        setIsHoldMode(false)
         doStartListening()
       }
     } else {
@@ -126,7 +132,7 @@ export default function DictationButton({ onResult, disabled, className = '', co
         title={isListening ? t('dictation.stop') : t('dictation.start')}
         className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed touch-none select-none ${
           isListening
-            ? `${colorClasses} text-white shadow-md ${isHoldModeRef.current ? 'scale-125 ring-4 ring-orange-300/50 animate-pulse' : 'animate-pulse'}`
+            ? `${colorClasses} text-white shadow-md ${isHoldMode ? 'scale-125 ring-4 ring-orange-300/50 animate-pulse' : 'animate-pulse'}`
             : idleClasses
         } ${className}`}
       >

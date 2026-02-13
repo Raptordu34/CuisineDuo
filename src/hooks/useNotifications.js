@@ -14,18 +14,10 @@ function urlBase64ToUint8Array(base64String) {
 
 export function useNotifications() {
   const { profile } = useAuth()
-  const [permission, setPermission] = useState('default')
-  const [supported, setSupported] = useState(false)
+  const supported = 'serviceWorker' in navigator && 'PushManager' in window && !!VAPID_PUBLIC_KEY
+  const [permission, setPermission] = useState(() => supported ? Notification.permission : 'default')
   const [subscribed, setSubscribed] = useState(false)
   const [error, setError] = useState(null)
-
-  useEffect(() => {
-    const isSupported = 'serviceWorker' in navigator && 'PushManager' in window && !!VAPID_PUBLIC_KEY
-    setSupported(isSupported)
-    if (isSupported) {
-      setPermission(Notification.permission)
-    }
-  }, [])
 
   // Check if already subscribed
   useEffect(() => {

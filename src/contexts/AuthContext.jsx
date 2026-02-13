@@ -5,7 +5,7 @@ const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => !!localStorage.getItem('profileId'))
 
   const fetchProfile = async (profileId) => {
     const { data, error } = await supabase
@@ -30,8 +30,6 @@ export function AuthProvider({ children }) {
       }).catch(() => {
         setLoading(false)
       })
-    } else {
-      setLoading(false)
     }
   }, [])
 

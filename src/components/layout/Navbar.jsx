@@ -70,16 +70,16 @@ export default function Navbar() {
       {/* Mobile bottom tab bar */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
         <div className="h-16 pb-[env(safe-area-inset-bottom)] flex justify-around items-center">
-          {navItems.map(({ to, label, Icon }) => (
+          {navItems.map((item) => (
             <Link
-              key={to}
-              to={to}
+              key={item.to}
+              to={item.to}
               className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${
-                isActive(to) ? 'text-orange-500' : 'text-gray-400'
+                isActive(item.to) ? 'text-orange-500' : 'text-gray-400'
               }`}
             >
-              <Icon />
-              <span className="text-[10px] font-medium">{label}</span>
+              <item.Icon />
+              <span className="text-[10px] font-medium">{item.label}</span>
             </Link>
           ))}
         </div>

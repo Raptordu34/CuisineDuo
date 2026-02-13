@@ -18,6 +18,7 @@ export function useDictation() {
   const finalTranscriptRef = useRef('')
   const wantListeningRef = useRef(false)
   const langRef = useRef('fr')
+  const startSessionRef = useRef(null)
 
   const isSupported = !!SpeechRecognition
 
@@ -74,7 +75,7 @@ export function useDictation() {
       if (wantListeningRef.current) {
         // Restart for the next utterance
         try {
-          startSession()
+          startSessionRef.current()
         } catch {
           wantListeningRef.current = false
           recognitionRef.current = null
@@ -89,6 +90,10 @@ export function useDictation() {
     recognitionRef.current = recognition
     recognition.start()
   }, [])
+
+  useEffect(() => {
+    startSessionRef.current = startSession
+  }, [startSession])
 
   const startListening = useCallback((lang) => {
     if (!SpeechRecognition) {

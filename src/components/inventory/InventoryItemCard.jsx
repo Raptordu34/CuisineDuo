@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState } from 'react'
+import { useRef, useCallback } from 'react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { FillLevelIndicator } from '../FillLevelPicker'
 
