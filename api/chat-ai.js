@@ -1,5 +1,9 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
+const HISTORY_LIMIT = 20
+const MAX_OUTPUT_TOKENS = 500
+const TEMPERATURE = 0.7
+
 export default async function handler(req, res) {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -22,7 +26,7 @@ export default async function handler(req, res) {
 
   // Formater l'historique pour Gemini (user/model)
   const safeHistory = Array.isArray(history) ? history : []
-  const formattedHistory = safeHistory.slice(-20).map(msg => ({
+  const formattedHistory = safeHistory.slice(-HISTORY_LIMIT).map(msg => ({
     role: msg.is_ai ? 'model' : 'user',
     parts: [{ text: (msg.content || '').replace(/@miam/gi, '').trim() }],
   })).filter(msg => msg.parts[0].text)
@@ -32,7 +36,7 @@ export default async function handler(req, res) {
   try {
     const chat = model.startChat({
       history: formattedHistory,
-      generationConfig: { maxOutputTokens: 500, temperature: 0.7 },
+      generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS, temperature: TEMPERATURE },
     })
     const result = await chat.sendMessage(cleanedMessage)
     return res.status(200).json({ response: result.response.text() })
