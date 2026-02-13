@@ -11,9 +11,12 @@ export default function InventoryItemCard({
   const didLongPress = useRef(false)
   const pointerStart = useRef(null)
 
-  const isExpired = item.estimated_expiry_date && new Date(item.estimated_expiry_date) < new Date()
-  const isExpiringSoon = !isExpired && item.estimated_expiry_date &&
-    (new Date(item.estimated_expiry_date) - new Date()) < 3 * 24 * 60 * 60 * 1000
+  const EXPIRY_SOON_MS = 3 * 24 * 60 * 60 * 1000
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const expiryDate = item.estimated_expiry_date ? new Date(item.estimated_expiry_date + 'T00:00:00') : null
+  const isExpired = expiryDate && expiryDate < today
+  const isExpiringSoon = !isExpired && expiryDate && (expiryDate - today) < EXPIRY_SOON_MS
 
   const fillLevel = item.fill_level ?? 1
   const effectiveQty = item.quantity * fillLevel
