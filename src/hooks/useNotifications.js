@@ -17,6 +17,7 @@ export function useNotifications() {
   const [permission, setPermission] = useState('default')
   const [supported, setSupported] = useState(false)
   const [subscribed, setSubscribed] = useState(false)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     const isSupported = 'serviceWorker' in navigator && 'PushManager' in window && !!VAPID_PUBLIC_KEY
@@ -38,6 +39,7 @@ export function useNotifications() {
 
   const subscribe = useCallback(async () => {
     if (!supported || !profile) return false
+    setError(null)
 
     try {
       const reg = await navigator.serviceWorker.ready
@@ -64,6 +66,7 @@ export function useNotifications() {
       return true
     } catch (err) {
       console.error('Push subscribe error:', err)
+      setError(err.message || 'Subscription failed')
       return false
     }
   }, [supported, profile])
@@ -89,8 +92,9 @@ export function useNotifications() {
       setSubscribed(false)
     } catch (err) {
       console.error('Push unsubscribe error:', err)
+      setError(err.message || 'Unsubscription failed')
     }
   }, [supported, profile])
 
-  return { supported, permission, subscribed, subscribe, unsubscribe }
+  return { supported, permission, subscribed, subscribe, unsubscribe, error }
 }

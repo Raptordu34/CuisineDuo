@@ -8,11 +8,15 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   const fetchProfile = async (profileId) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', profileId)
       .single()
+    if (error) {
+      console.error('Failed to fetch profile:', error.message)
+      return null
+    }
     return data
   }
 
@@ -20,7 +24,10 @@ export function AuthProvider({ children }) {
     const savedId = localStorage.getItem('profileId')
     if (savedId) {
       fetchProfile(savedId).then((data) => {
+        if (!data) localStorage.removeItem('profileId')
         setProfile(data)
+        setLoading(false)
+      }).catch(() => {
         setLoading(false)
       })
     } else {
@@ -42,7 +49,7 @@ export function AuthProvider({ children }) {
   const refreshProfile = async () => {
     if (profile) {
       const data = await fetchProfile(profile.id)
-      setProfile(data)
+      if (data) setProfile(data)
     }
   }
 

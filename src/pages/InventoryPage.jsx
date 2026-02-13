@@ -46,6 +46,7 @@ export default function InventoryPage() {
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [dictationCorrecting, setDictationCorrecting] = useState(false)
   const [dictationTrace, setDictationTrace] = useState(null)
+  const [toastMessage, setToastMessage] = useState(null)
 
   useEffect(() => {
     if (!profile?.household_id) return
@@ -381,7 +382,7 @@ export default function InventoryPage() {
               </svg>
               {t('inventory.add')}
             </button>
-            <ScanReceiptButton onScanComplete={handleScanComplete} />
+            <ScanReceiptButton onScanComplete={handleScanComplete} onError={(msg) => { setToastMessage(msg); setTimeout(() => setToastMessage(null), 5000) }} />
           </div>
         )}
       </div>
@@ -445,6 +446,13 @@ export default function InventoryPage() {
           onClose={() => { setScanResults(null); setReceiptTotal(null) }}
           onConfirm={handleScanConfirm}
         />
+      )}
+
+      {toastMessage && (
+        <div className="fixed bottom-20 left-4 right-4 md:left-auto md:right-4 md:w-96 z-50 bg-red-600 text-white px-4 py-3 rounded-xl shadow-lg text-sm flex items-center justify-between">
+          <span>{toastMessage}</span>
+          <button onClick={() => setToastMessage(null)} className="ml-2 text-white/80 hover:text-white cursor-pointer">✕</button>
+        </div>
       )}
     </div>
   )

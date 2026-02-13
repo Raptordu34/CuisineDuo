@@ -67,7 +67,12 @@ Apply ALL the user's instructions. If you can't understand an instruction, skip 
       })
 
       const result = await model.generateContent(text)
-      const parsed = JSON.parse(result.response.text())
+      let parsed
+      try {
+        parsed = JSON.parse(result.response.text())
+      } catch {
+        return res.status(500).json({ error: 'Invalid JSON response from AI' })
+      }
       return res.status(200).json(parsed)
     }
 
@@ -112,7 +117,12 @@ Match item names flexibly (e.g., "lait" matches "Lait demi-écrémé"). Apply AL
       })
 
       const result = await model.generateContent(text)
-      const parsed = JSON.parse(result.response.text())
+      let parsed
+      try {
+        parsed = JSON.parse(result.response.text())
+      } catch {
+        return res.status(500).json({ error: 'Invalid JSON response from AI' })
+      }
       return res.status(200).json(parsed)
     }
 

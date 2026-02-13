@@ -48,8 +48,8 @@ export default function HomePage() {
           expenses: (purchaseTotal + consumedTotal).toFixed(2),
           expiringSoon,
         })
-      } catch {
-        // Tables may not exist yet
+      } catch (err) {
+        console.error('Failed to fetch dashboard stats:', err)
       }
     }
 
@@ -100,20 +100,13 @@ export default function HomePage() {
           color="blue"
           onClick={() => navigate('/inventory')}
         />
-        <DashboardCard
-          icon="💰"
-          title={t('home.budget')}
-          description={t('home.budgetDesc')}
-          color="green"
-        />
       </div>
 
       {/* Stats placeholder */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <StatCard label={t('home.productsInStock')} value={stats.inStock} />
         <StatCard label={t('home.expensesThisMonth')} value={`${stats.expenses}\u00A0\u20AC`} />
         <StatCard label={t('home.expiringNear')} value={stats.expiringSoon} />
-        <StatCard label={t('home.recipesCooked')} value="--" />
       </div>
     </div>
   )

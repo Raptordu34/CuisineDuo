@@ -95,7 +95,7 @@ export default function ScanReviewItemRow({ item, index, checked, onToggle, onCh
             </select>
           </div>
         </div>
-        {item.quantity > 1 && (
+        {Math.floor(item.quantity) > 1 && (
           <p className="text-xs text-orange-500 mt-1">
             {t('inventory.willSplit', { count: Math.floor(item.quantity) })}
           </p>
