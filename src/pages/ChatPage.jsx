@@ -5,6 +5,13 @@ import { useLanguage } from '../contexts/LanguageContext'
 import DictationButton from '../components/DictationButton'
 import DictationTrace from '../components/DictationTrace'
 
+// Debug : ajouter ?debug=1 dans l'URL ou localStorage.setItem('chatDebug','1')
+const DEBUG = typeof window !== 'undefined' && (
+  new URLSearchParams(window.location.search).get('debug') === '1' ||
+  localStorage.getItem('chatDebug') === '1'
+)
+const log = (...args) => DEBUG && console.log('[ChatDebug]', ...args)
+
 export default function ChatPage() {
   const { profile } = useAuth()
   const { t, lang } = useLanguage()
@@ -34,12 +41,17 @@ export default function ChatPage() {
     if (!profile?.household_id) return
 
     const fetchMessages = async () => {
-      const { data } = await supabase
+      log('fetchMessages()')
+      const { data, error } = await supabase
         .from('messages')
         .select('*, profiles(display_name)')
         .eq('household_id', profile.household_id)
         .order('created_at', { ascending: true })
-      if (data) setMessages(data)
+      if (error) log('fetchMessages error', error)
+      if (data) {
+        log('fetchMessages OK', data.length, 'messages')
+        setMessages(data)
+      }
     }
 
     fetchMessages()
@@ -47,11 +59,30 @@ export default function ChatPage() {
     // Fallback : refetch au retour de visibilité (mobile/PWA sortant de l'arrière-plan)
     // Rattrape les messages manqués si la connexion Realtime a été perdue silencieusement
     const handleVisibilityChange = () => {
+      log('visibilitychange', document.visibilityState)
       if (document.visibilityState === 'visible') {
         fetchMessages()
       }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    let pollingId = null
+    let realtimeAbandoned = false
+    const POLL_INTERVAL_MS = 5000
+
+    const startPollingFallback = () => {
+      if (pollingId) return
+      log('Realtime en échec → polling toutes les', POLL_INTERVAL_MS / 1000, 's')
+      fetchMessages()
+      pollingId = setInterval(fetchMessages, POLL_INTERVAL_MS)
+    }
+    const stopPollingFallback = () => {
+      if (pollingId) {
+        clearInterval(pollingId)
+        pollingId = null
+        log('Polling fallback arrêté (Realtime OK)')
+      }
+    }
 
     const channel = supabase
       .channel(`messages:${profile.household_id}`)
@@ -64,25 +95,38 @@ export default function ChatPage() {
           filter: `household_id=eq.${profile.household_id}`,
         },
         async (payload) => {
+          log('Realtime INSERT reçu', payload.new?.id)
+          stopPollingFallback()
           const { data } = await supabase
             .from('messages')
             .select('*, profiles(display_name)')
             .eq('id', payload.new.id)
             .single()
           if (data) {
+            log('Message ajouté à l\'état', data.id)
             setMessages((prev) => {
               if (prev.some(m => m.id === data.id)) return prev
               return [...prev, data].sort((a, b) =>
                 new Date(a.created_at) - new Date(b.created_at)
               )
             })
-          }
+          } else log('pas de data pour payload', payload.new?.id)
         }
       )
-      .subscribe()
+      .subscribe((status, err) => {
+        log('Channel subscribe status:', status, err || '')
+        if (status === 'SUBSCRIBED') {
+          stopPollingFallback()
+        } else if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') && !realtimeAbandoned) {
+          realtimeAbandoned = true
+          startPollingFallback()
+          supabase.removeChannel(channel)
+        }
+      })
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
+      stopPollingFallback()
       supabase.removeChannel(channel)
     }
   }, [profile?.household_id])
