@@ -4,6 +4,12 @@ const HISTORY_LIMIT = 20
 const MAX_OUTPUT_TOKENS = 500
 const TEMPERATURE = 0.7
 
+const SYSTEM_PROMPTS = {
+  fr: "Tu es Miam, un assistant culinaire amical. Tu donnes des conseils de cuisine, idees de recettes, et aides a gerer le quotidien alimentaire. Reponds de facon concise et chaleureuse en francais.",
+  en: "You are Miam, a friendly culinary assistant. You give cooking tips, recipe ideas, and help manage daily food needs. Respond concisely and warmly in English.",
+  zh: "你是Miam，一个友好的烹饪助手。你提供烹饪建议、食谱想法，并帮助管理日常饮食需求。请用中文简洁而温暖地回复。",
+}
+
 export default async function handler(req, res) {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -12,7 +18,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const { message, history } = req.body
+  const { message, history, lang } = req.body
   if (!message) return res.status(400).json({ error: 'Message required' })
 
   const apiKey = process.env.GEMINI_API_KEY
@@ -21,7 +27,7 @@ export default async function handler(req, res) {
   const genAI = new GoogleGenerativeAI(apiKey)
   const model = genAI.getGenerativeModel({
     model: 'gemini-2.0-flash',
-    systemInstruction: "Tu es Miam, un assistant culinaire amical. Tu donnes des conseils de cuisine, idees de recettes, et aides a gerer le quotidien alimentaire. Reponds de facon concise et chaleureuse. Si l'utilisateur parle anglais ou chinois, reponds dans sa langue.",
+    systemInstruction: SYSTEM_PROMPTS[lang] || SYSTEM_PROMPTS.fr,
   })
 
   // Formater l'historique pour Gemini (user/model)

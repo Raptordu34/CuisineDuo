@@ -122,7 +122,7 @@ export default function ChatPage() {
         const res = await fetch('/api/chat-ai', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: content, history: historyForAI }),
+          body: JSON.stringify({ message: content, history: historyForAI, lang }),
         })
 
         if (!res.ok) throw new Error('AI request failed')
