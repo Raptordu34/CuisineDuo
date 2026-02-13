@@ -21,10 +21,11 @@ export default async function handler(req, res) {
   })
 
   // Formater l'historique pour Gemini (user/model)
-  const formattedHistory = (history || []).slice(-20).map(msg => ({
+  const safeHistory = Array.isArray(history) ? history : []
+  const formattedHistory = safeHistory.slice(-20).map(msg => ({
     role: msg.is_ai ? 'model' : 'user',
-    parts: [{ text: msg.content.replace(/@miam/gi, '').trim() }],
-  }))
+    parts: [{ text: (msg.content || '').replace(/@miam/gi, '').trim() }],
+  })).filter(msg => msg.parts[0].text)
 
   const cleanedMessage = message.replace(/@miam/gi, '').trim()
 
