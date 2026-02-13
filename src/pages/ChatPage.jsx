@@ -90,11 +90,28 @@ export default function ChatPage() {
     setNewMessage('')
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
 
-    await supabase.from('messages').insert({
+    // Affichage optimiste : montrer le message immédiatement
+    const optimisticMsg = {
+      id: 'temp-' + Date.now(),
       household_id: profile.household_id,
       profile_id: profile.id,
       content,
-    })
+      is_ai: false,
+      created_at: new Date().toISOString(),
+      profiles: { display_name: profile.display_name },
+    }
+    setMessages((prev) => [...prev, optimisticMsg])
+
+    const { data: inserted } = await supabase.from('messages').insert({
+      household_id: profile.household_id,
+      profile_id: profile.id,
+      content,
+    }).select('*, profiles(display_name)').single()
+
+    // Remplacer le message optimiste par le vrai (avec le bon id)
+    if (inserted) {
+      setMessages((prev) => prev.map((m) => m.id === optimisticMsg.id ? inserted : m))
+    }
 
     // Fire-and-forget push notification
     fetch('/api/send-notification', {
@@ -130,12 +147,28 @@ export default function ChatPage() {
         const data = await res.json()
         const aiResponse = data.response
 
-        await supabase.from('messages').insert({
+        // Affichage optimiste du message AI
+        const optimisticAiMsg = {
+          id: 'temp-ai-' + Date.now(),
           household_id: profile.household_id,
           profile_id: profile.id,
           content: aiResponse,
           is_ai: true,
-        })
+          created_at: new Date().toISOString(),
+          profiles: { display_name: profile.display_name },
+        }
+        setMessages((prev) => [...prev, optimisticAiMsg])
+
+        const { data: insertedAi } = await supabase.from('messages').insert({
+          household_id: profile.household_id,
+          profile_id: profile.id,
+          content: aiResponse,
+          is_ai: true,
+        }).select('*, profiles(display_name)').single()
+
+        if (insertedAi) {
+          setMessages((prev) => prev.map((m) => m.id === optimisticAiMsg.id ? insertedAi : m))
+        }
 
         // Fire-and-forget push notification for AI response
         fetch('/api/send-notification', {

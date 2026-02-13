@@ -26,15 +26,28 @@ export function useNotifications() {
     }
   }, [])
 
-  // Check if already subscribed
+  // Check if already subscribed + re-sync with server
   useEffect(() => {
-    if (!supported) return
+    if (!supported || !profile?.id || !profile?.household_id) return
     navigator.serviceWorker.ready.then((reg) => {
       reg.pushManager.getSubscription().then((sub) => {
         setSubscribed(!!sub)
+        // Re-sync: si le navigateur a un abonnement, le re-enregistrer côté serveur
+        // (au cas où la base a été réinitialisée)
+        if (sub) {
+          fetch('/api/subscribe-push', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              profile_id: profile.id,
+              household_id: profile.household_id,
+              subscription: sub.toJSON(),
+            }),
+          }).catch(() => {})
+        }
       })
     })
-  }, [supported])
+  }, [supported, profile?.id, profile?.household_id])
 
   const subscribe = useCallback(async () => {
     if (!supported || !profile) return false
