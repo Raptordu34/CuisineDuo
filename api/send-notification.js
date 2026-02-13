@@ -25,7 +25,7 @@ export default async function handler(req, res) {
 
   // Fetch all subscriptions for this household except sender
   const response = await fetch(
-    `${supabaseUrl}/rest/v1/push_subscriptions?household_id=eq.${household_id}&profile_id=neq.${sender_profile_id}&select=id,subscription`,
+    `${supabaseUrl}/rest/v1/push_subscriptions?household_id=eq.${encodeURIComponent(household_id)}&profile_id=neq.${encodeURIComponent(sender_profile_id)}&select=id,subscription`,
     {
       headers: {
         apikey: supabaseKey,
@@ -60,7 +60,7 @@ export default async function handler(req, res) {
 
   // Clean up expired subscriptions
   if (expiredIds.length > 0) {
-    const idsParam = expiredIds.map((id) => `"${id}"`).join(',')
+    const idsParam = expiredIds.map((id) => `"${encodeURIComponent(id)}"`).join(',')
     await fetch(
       `${supabaseUrl}/rest/v1/push_subscriptions?id=in.(${idsParam})`,
       {
