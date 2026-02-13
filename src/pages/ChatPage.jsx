@@ -44,6 +44,15 @@ export default function ChatPage() {
 
     fetchMessages()
 
+    // Fallback : refetch au retour de visibilité (mobile/PWA sortant de l'arrière-plan)
+    // Rattrape les messages manqués si la connexion Realtime a été perdue silencieusement
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchMessages()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
     const channel = supabase
       .channel(`messages:${profile.household_id}`)
       .on(
@@ -73,6 +82,7 @@ export default function ChatPage() {
       .subscribe()
 
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       supabase.removeChannel(channel)
     }
   }, [profile?.household_id])
