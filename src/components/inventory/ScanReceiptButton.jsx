@@ -30,7 +30,7 @@ function compressImage(file, maxWidth = 800, quality = 0.6) {
   })
 }
 
-export default function ScanReceiptButton({ onScanComplete, disabled }) {
+export default function ScanReceiptButton({ onScanComplete, onError, disabled }) {
   const { t, lang } = useLanguage()
   const cameraRef = useRef(null)
   const galleryRef = useRef(null)
@@ -84,10 +84,10 @@ export default function ScanReceiptButton({ onScanComplete, disabled }) {
       if (data.items && data.items.length > 0) {
         onScanComplete(data.items, data.receipt_total ?? null)
       } else {
-        alert(t('inventory.scanNoItems'))
+        onError?.(t('inventory.scanNoItems'))
       }
     } catch (err) {
-      alert(`${t('inventory.scanError')}\n${err.message}`)
+      onError?.(`${t('inventory.scanError')}: ${err.message}`)
     } finally {
       setScanning(false)
       setSelectedMode(null)
