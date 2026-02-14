@@ -33,6 +33,9 @@ export default function ChatPage() {
   useEffect(() => {
     if (!profile?.household_id) return
 
+    let pollingInterval = null
+    let realtimeActive = false
+
     const fetchMessages = async () => {
       const { data } = await supabase
         .from('messages')
@@ -40,6 +43,19 @@ export default function ChatPage() {
         .eq('household_id', profile.household_id)
         .order('created_at', { ascending: true })
       if (data) setMessages(data)
+    }
+
+    const startPollingFallback = () => {
+      if (pollingInterval) return
+      console.warn('[Chat] Realtime indisponible, activation du polling (5s)')
+      pollingInterval = setInterval(fetchMessages, 5000)
+    }
+
+    const stopPollingFallback = () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval)
+        pollingInterval = null
+      }
     }
 
     fetchMessages()
@@ -70,10 +86,37 @@ export default function ChatPage() {
           }
         }
       )
-      .subscribe()
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          realtimeActive = true
+          stopPollingFallback()
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error('[Chat] Realtime error:', status, err)
+          realtimeActive = false
+          startPollingFallback()
+        } else if (status === 'CLOSED') {
+          realtimeActive = false
+          startPollingFallback()
+        }
+      })
+
+    // Re-fetch au retour au premier plan (mobile/PWA)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchMessages()
+        // Si le realtime etait actif mais la connexion a pu mourir en arriere-plan,
+        // on re-subscribe pour etre sur
+        if (!realtimeActive && !pollingInterval) {
+          startPollingFallback()
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
+      stopPollingFallback()
       supabase.removeChannel(channel)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [profile?.household_id])
 
