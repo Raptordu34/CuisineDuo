@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import DictationButton from '../components/DictationButton'
 import DictationTrace from '../components/DictationTrace'
+import useUnreadMessages from '../hooks/useUnreadMessages'
 
 export default function ChatPage() {
   const { profile } = useAuth()
@@ -17,6 +18,7 @@ export default function ChatPage() {
   const [dictationTrace, setDictationTrace] = useState(null)
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
+  const { markAsRead } = useUnreadMessages()
 
   const scrollToBottom = () => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -59,6 +61,7 @@ export default function ChatPage() {
     }
 
     fetchMessages()
+    markAsRead()
 
     const channel = supabase
       .channel(`messages:${profile.household_id}`)
@@ -83,6 +86,7 @@ export default function ChatPage() {
                 new Date(a.created_at) - new Date(b.created_at)
               )
             })
+            markAsRead()
           }
         }
       )
@@ -104,6 +108,7 @@ export default function ChatPage() {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         fetchMessages()
+        markAsRead()
         // Si le realtime etait actif mais la connexion a pu mourir en arriere-plan,
         // on re-subscribe pour etre sur
         if (!realtimeActive && !pollingInterval) {
@@ -118,7 +123,7 @@ export default function ChatPage() {
       supabase.removeChannel(channel)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [profile?.household_id])
+  }, [profile?.household_id, markAsRead])
 
   useEffect(() => {
     scrollToBottom()

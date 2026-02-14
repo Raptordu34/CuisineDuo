@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
+import useUnreadMessages from '../../hooks/useUnreadMessages'
 import LanguageSwitcher from '../LanguageSwitcher'
 
 function HomeIcon() {
@@ -31,6 +32,9 @@ export default function Navbar() {
   const { profile, signOut } = useAuth()
   const { t } = useLanguage()
   const { pathname } = useLocation()
+  const { unreadCount } = useUnreadMessages()
+
+  const badge = unreadCount > 0 ? (unreadCount > 9 ? '9+' : String(unreadCount)) : null
 
   const initial = profile?.display_name?.charAt(0)?.toUpperCase() || '?'
 
@@ -78,7 +82,14 @@ export default function Navbar() {
                 isActive(item.to) ? 'text-orange-500' : 'text-gray-400'
               }`}
             >
-              <item.Icon />
+              <span className="relative">
+                <item.Icon />
+                {item.to === '/chat' && badge && (
+                  <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 leading-none">
+                    {badge}
+                  </span>
+                )}
+              </span>
               <span className="text-[10px] font-medium">{item.label}</span>
             </Link>
           ))}
@@ -98,11 +109,16 @@ export default function Navbar() {
               <Link
                 key={to}
                 to={to}
-                className={`hover:text-orange-500 transition-colors ${
+                className={`relative hover:text-orange-500 transition-colors ${
                   isActive(to) ? 'text-orange-500' : ''
                 }`}
               >
                 {label}
+                {to === '/chat' && badge && (
+                  <span className="absolute -top-1.5 -right-3.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 leading-none">
+                    {badge}
+                  </span>
+                )}
               </Link>
             ))}
           </div>
