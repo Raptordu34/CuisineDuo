@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import DictationButton from '../components/DictationButton'
 import DictationTrace from '../components/DictationTrace'
-import useUnreadMessages from '../hooks/useUnreadMessages'
+import { useUnreadMessages } from '../contexts/UnreadMessagesContext'
 
 export default function ChatPage() {
   const { profile } = useAuth()

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { LanguageProvider } from './contexts/LanguageContext'
 import { AuthProvider } from './contexts/AuthContext'
+import { UnreadMessagesProvider } from './contexts/UnreadMessagesContext'
 import Layout from './components/layout/Layout'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import LoginPage from './pages/LoginPage'
@@ -14,6 +15,7 @@ function App() {
     <BrowserRouter>
       <LanguageProvider>
       <AuthProvider>
+      <UnreadMessagesProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
@@ -48,6 +50,7 @@ function App() {
             }
           />
         </Routes>
+      </UnreadMessagesProvider>
       </AuthProvider>
       </LanguageProvider>
     </BrowserRouter>

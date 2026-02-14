@@ -1,16 +1,35 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from './AuthContext'
 
-export default function useUnreadMessages() {
+const UnreadMessagesContext = createContext(null)
+
+const POLLING_INTERVAL = 5000
+
+export function UnreadMessagesProvider({ children }) {
   const { profile } = useAuth()
   const [unreadCount, setUnreadCount] = useState(0)
-  const [lastReadAt, setLastReadAt] = useState(null)
   const [readStatuses, setReadStatuses] = useState([])
   const lastReadAtRef = useRef(null)
+  const lastReadAtState = useRef(null)
 
   const profileId = profile?.id
   const householdId = profile?.household_id
+
+  // Requete pour compter les messages non lus
+  const fetchUnreadCount = useCallback(async () => {
+    if (!profileId || !householdId) return
+    const since = lastReadAtState.current || new Date(0).toISOString()
+
+    const { count } = await supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('household_id', householdId)
+      .neq('profile_id', profileId)
+      .gt('created_at', since)
+
+    if (count != null) setUnreadCount(count)
+  }, [profileId, householdId])
 
   // Charger le last_read_at depuis Supabase
   const fetchLastReadAt = useCallback(async () => {
@@ -24,7 +43,7 @@ export default function useUnreadMessages() {
       .single()
 
     const ts = data?.last_read_at || new Date(0).toISOString()
-    setLastReadAt(ts)
+    lastReadAtState.current = ts
     if (!lastReadAtRef.current) lastReadAtRef.current = ts
     return ts
   }, [profileId, householdId])
@@ -41,7 +60,7 @@ export default function useUnreadMessages() {
         { onConflict: 'profile_id,household_id' }
       )
 
-    setLastReadAt(now)
+    lastReadAtState.current = now
     setUnreadCount(0)
   }, [profileId, householdId])
 
@@ -61,24 +80,32 @@ export default function useUnreadMessages() {
   useEffect(() => {
     if (!profileId || !householdId) return
 
+    let pollingInterval = null
+    let realtimeActive = false
+
     const init = async () => {
-      const ts = await fetchLastReadAt()
+      await fetchLastReadAt()
       await fetchReadStatuses()
+      await fetchUnreadCount()
+    }
 
-      // Compter les messages non lus
-      const { count } = await supabase
-        .from('messages')
-        .select('*', { count: 'exact', head: true })
-        .eq('household_id', householdId)
-        .neq('profile_id', profileId)
-        .gt('created_at', ts || new Date(0).toISOString())
+    const startPolling = () => {
+      if (pollingInterval) return
+      pollingInterval = setInterval(() => {
+        fetchUnreadCount()
+        fetchReadStatuses()
+      }, POLLING_INTERVAL)
+    }
 
-      if (count != null) setUnreadCount(count)
+    const stopPolling = () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval)
+        pollingInterval = null
+      }
     }
 
     init()
 
-    // Ecouter les nouveaux messages en temps reel
     const channel = supabase
       .channel(`unread:${householdId}:${profileId}`)
       .on(
@@ -105,7 +132,6 @@ export default function useUnreadMessages() {
         (payload) => {
           const updated = payload.new
           if (updated.profile_id === profileId) return
-          // Mettre a jour le readStatus du membre concerne
           setReadStatuses((prev) => {
             const idx = prev.findIndex((r) => r.profile_id === updated.profile_id)
             if (idx >= 0) {
@@ -113,18 +139,49 @@ export default function useUnreadMessages() {
               next[idx] = { ...next[idx], last_read_at: updated.last_read_at }
               return next
             }
-            // Nouveau membre — re-fetch pour avoir le display_name
             fetchReadStatuses()
             return prev
           })
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          realtimeActive = true
+          stopPolling()
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          realtimeActive = false
+          startPolling()
+        }
+      })
+
+    // Re-fetch au retour au premier plan
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchUnreadCount()
+        fetchReadStatuses()
+        if (!realtimeActive && !pollingInterval) {
+          startPolling()
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
+      stopPolling()
       supabase.removeChannel(channel)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [profileId, householdId, fetchLastReadAt, fetchReadStatuses])
+  }, [profileId, householdId, fetchLastReadAt, fetchReadStatuses, fetchUnreadCount])
 
-  return { unreadCount, lastReadAt, lastReadAtRef, readStatuses, markAsRead }
+  return (
+    <UnreadMessagesContext.Provider value={{ unreadCount, lastReadAtRef, readStatuses, markAsRead }}>
+      {children}
+    </UnreadMessagesContext.Provider>
+  )
+}
+
+export function useUnreadMessages() {
+  const context = useContext(UnreadMessagesContext)
+  if (!context) throw new Error('useUnreadMessages must be used within UnreadMessagesProvider')
+  return context
 }
