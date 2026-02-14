@@ -82,6 +82,7 @@ export function UnreadMessagesProvider({ children }) {
 
     let pollingInterval = null
     let realtimeActive = false
+    let mounted = true
 
     const init = async () => {
       await fetchLastReadAt()
@@ -90,7 +91,7 @@ export function UnreadMessagesProvider({ children }) {
     }
 
     const startPolling = () => {
-      if (pollingInterval) return
+      if (pollingInterval || !mounted) return
       pollingInterval = setInterval(() => {
         fetchUnreadCount()
         fetchReadStatuses()
@@ -167,6 +168,7 @@ export function UnreadMessagesProvider({ children }) {
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
+      mounted = false
       stopPolling()
       supabase.removeChannel(channel)
       document.removeEventListener('visibilitychange', handleVisibilityChange)

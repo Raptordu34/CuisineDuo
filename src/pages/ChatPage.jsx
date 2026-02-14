@@ -66,6 +66,7 @@ export default function ChatPage() {
 
     let pollingInterval = null
     let realtimeActive = false
+    let mounted = true
 
     const fetchMessages = async () => {
       const { data } = await supabase
@@ -77,7 +78,7 @@ export default function ChatPage() {
     }
 
     const startPollingFallback = () => {
-      if (pollingInterval) return
+      if (pollingInterval || !mounted) return
       console.warn('[Chat] Realtime indisponible, activation du polling (5s)')
       pollingInterval = setInterval(fetchMessages, 5000)
     }
@@ -143,6 +144,7 @@ export default function ChatPage() {
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
+      mounted = false
       stopPollingFallback()
       supabase.removeChannel(channel)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
