@@ -1,46 +1,82 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-
-const STORAGE_KEY_PREFIX = 'chat_lastReadAt_'
 
 export default function useUnreadMessages() {
   const { profile } = useAuth()
   const [unreadCount, setUnreadCount] = useState(0)
+  const [lastReadAt, setLastReadAt] = useState(null)
+  const [readStatuses, setReadStatuses] = useState([])
+  const lastReadAtRef = useRef(null)
 
   const profileId = profile?.id
   const householdId = profile?.household_id
 
-  const getLastReadAt = useCallback(() => {
-    if (!profileId) return null
-    const stored = localStorage.getItem(STORAGE_KEY_PREFIX + profileId)
-    return stored || new Date(0).toISOString()
-  }, [profileId])
+  // Charger le last_read_at depuis Supabase
+  const fetchLastReadAt = useCallback(async () => {
+    if (!profileId || !householdId) return null
 
-  const markAsRead = useCallback(() => {
-    if (!profileId) return
-    localStorage.setItem(STORAGE_KEY_PREFIX + profileId, new Date().toISOString())
+    const { data } = await supabase
+      .from('chat_read_status')
+      .select('last_read_at')
+      .eq('profile_id', profileId)
+      .eq('household_id', householdId)
+      .single()
+
+    const ts = data?.last_read_at || new Date(0).toISOString()
+    setLastReadAt(ts)
+    if (!lastReadAtRef.current) lastReadAtRef.current = ts
+    return ts
+  }, [profileId, householdId])
+
+  // Marquer comme lu via upsert dans Supabase
+  const markAsRead = useCallback(async () => {
+    if (!profileId || !householdId) return
+    const now = new Date().toISOString()
+
+    await supabase
+      .from('chat_read_status')
+      .upsert(
+        { profile_id: profileId, household_id: householdId, last_read_at: now },
+        { onConflict: 'profile_id,household_id' }
+      )
+
+    setLastReadAt(now)
     setUnreadCount(0)
-  }, [profileId])
+  }, [profileId, householdId])
+
+  // Charger les read statuses des autres membres du foyer
+  const fetchReadStatuses = useCallback(async () => {
+    if (!householdId || !profileId) return
+
+    const { data } = await supabase
+      .from('chat_read_status')
+      .select('profile_id, last_read_at, profiles(display_name)')
+      .eq('household_id', householdId)
+      .neq('profile_id', profileId)
+
+    if (data) setReadStatuses(data)
+  }, [householdId, profileId])
 
   useEffect(() => {
     if (!profileId || !householdId) return
 
-    const lastReadAt = getLastReadAt()
+    const init = async () => {
+      const ts = await fetchLastReadAt()
+      await fetchReadStatuses()
 
-    // Requete initiale pour compter les messages non lus
-    const fetchUnreadCount = async () => {
+      // Compter les messages non lus
       const { count } = await supabase
         .from('messages')
         .select('*', { count: 'exact', head: true })
         .eq('household_id', householdId)
         .neq('profile_id', profileId)
-        .gt('created_at', lastReadAt)
+        .gt('created_at', ts || new Date(0).toISOString())
 
       if (count != null) setUnreadCount(count)
     }
 
-    fetchUnreadCount()
+    init()
 
     // Ecouter les nouveaux messages en temps reel
     const channel = supabase
@@ -54,9 +90,33 @@ export default function useUnreadMessages() {
           filter: `household_id=eq.${householdId}`,
         },
         (payload) => {
-          // Ignorer ses propres messages
           if (payload.new.profile_id === profileId) return
           setUnreadCount((prev) => prev + 1)
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'chat_read_status',
+          filter: `household_id=eq.${householdId}`,
+        },
+        (payload) => {
+          const updated = payload.new
+          if (updated.profile_id === profileId) return
+          // Mettre a jour le readStatus du membre concerne
+          setReadStatuses((prev) => {
+            const idx = prev.findIndex((r) => r.profile_id === updated.profile_id)
+            if (idx >= 0) {
+              const next = [...prev]
+              next[idx] = { ...next[idx], last_read_at: updated.last_read_at }
+              return next
+            }
+            // Nouveau membre — re-fetch pour avoir le display_name
+            fetchReadStatuses()
+            return prev
+          })
         }
       )
       .subscribe()
@@ -64,7 +124,7 @@ export default function useUnreadMessages() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [profileId, householdId, getLastReadAt])
+  }, [profileId, householdId, fetchLastReadAt, fetchReadStatuses])
 
-  return { unreadCount, markAsRead }
+  return { unreadCount, lastReadAt, lastReadAtRef, readStatuses, markAsRead }
 }

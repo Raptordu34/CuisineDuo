@@ -18,6 +18,7 @@ export const translations = {
     'chat.aiError': 'Desole, je n\'ai pas pu repondre.',
     'chat.aiHint': 'Tapez @Miam pour poser une question culinaire',
     'chat.aiPlaceholder': 'Demandez a Miam...',
+    'chat.unreadMessages': '{{count}} message(s) non lu(s)',
 
     // Login
     'login.whoIsIt': 'Qui est-ce ?',
@@ -190,6 +191,7 @@ export const translations = {
     'chat.aiError': 'Sorry, I couldn\'t respond.',
     'chat.aiHint': 'Type @Miam to ask a cooking question',
     'chat.aiPlaceholder': 'Ask Miam...',
+    'chat.unreadMessages': '{{count}} unread message(s)',
 
     // Login
     'login.whoIsIt': 'Who is this?',
@@ -362,6 +364,7 @@ export const translations = {
     'chat.aiError': '\u62b1\u6b49\uff0c\u65e0\u6cd5\u56de\u590d\u3002',
     'chat.aiHint': '\u8f93\u5165@Miam\u63d0\u95ee',
     'chat.aiPlaceholder': '\u95ee Miam...',
+    'chat.unreadMessages': '{{count}} \u6761\u672a\u8bfb\u6d88\u606f',
 
     // Login
     'login.whoIsIt': '\u4f60\u662f\u8c01\uff1f',

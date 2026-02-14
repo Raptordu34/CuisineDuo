@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -18,11 +18,40 @@ export default function ChatPage() {
   const [dictationTrace, setDictationTrace] = useState(null)
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
-  const { markAsRead } = useUnreadMessages()
+  const unreadSeparatorRef = useRef(null)
+  const scrollContainerRef = useRef(null)
+  const initialScrollDone = useRef(false)
+  const { markAsRead, lastReadAtRef, readStatuses } = useUnreadMessages()
 
-  const scrollToBottom = () => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
+  // Calculer pour chaque message "mine" quels membres ont lu jusqu'a ce message
+  // On affiche les avatars uniquement sous le dernier message lu par chaque membre
+  const readAvatarsByMessageId = useMemo(() => {
+    if (!readStatuses.length || !messages.length || !profile?.id) return {}
+
+    const myMessages = messages.filter((m) => m.profile_id === profile.id && !m.is_ai)
+    const result = {}
+
+    for (const rs of readStatuses) {
+      const memberReadAt = new Date(rs.last_read_at)
+      // Trouver le dernier de mes messages lu par ce membre
+      let lastReadMsg = null
+      for (let i = myMessages.length - 1; i >= 0; i--) {
+        if (new Date(myMessages[i].created_at) <= memberReadAt) {
+          lastReadMsg = myMessages[i]
+          break
+        }
+      }
+      if (lastReadMsg) {
+        if (!result[lastReadMsg.id]) result[lastReadMsg.id] = []
+        result[lastReadMsg.id].push({
+          profile_id: rs.profile_id,
+          display_name: rs.profiles?.display_name || '?',
+        })
+      }
+    }
+
+    return result
+  }, [readStatuses, messages, profile?.id])
 
   // Auto-resize textarea when content changes
   useEffect(() => {
@@ -61,7 +90,6 @@ export default function ChatPage() {
     }
 
     fetchMessages()
-    markAsRead()
 
     const channel = supabase
       .channel(`messages:${profile.household_id}`)
@@ -86,7 +114,6 @@ export default function ChatPage() {
                 new Date(a.created_at) - new Date(b.created_at)
               )
             })
-            markAsRead()
           }
         }
       )
@@ -108,9 +135,6 @@ export default function ChatPage() {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         fetchMessages()
-        markAsRead()
-        // Si le realtime etait actif mais la connexion a pu mourir en arriere-plan,
-        // on re-subscribe pour etre sur
         if (!realtimeActive && !pollingInterval) {
           startPollingFallback()
         }
@@ -123,11 +147,70 @@ export default function ChatPage() {
       supabase.removeChannel(channel)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [profile?.household_id, markAsRead])
+  }, [profile?.household_id])
+
+  // Scroll initial : vers le separateur non lu ou vers le bas
+  useEffect(() => {
+    if (!messages.length || initialScrollDone.current) return
+
+    // Petit delai pour que le DOM soit a jour
+    requestAnimationFrame(() => {
+      if (unreadSeparatorRef.current) {
+        unreadSeparatorRef.current.scrollIntoView({ block: 'center' })
+      } else {
+        bottomRef.current?.scrollIntoView()
+      }
+      initialScrollDone.current = true
+    })
+  }, [messages])
+
+  // Scroll en bas pour les nouveaux messages (seulement si deja en bas)
+  const isNearBottom = useRef(true)
+
+  const handleScroll = useCallback(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    const threshold = 100
+    isNearBottom.current =
+      container.scrollHeight - container.scrollTop - container.clientHeight < threshold
+  }, [])
 
   useEffect(() => {
-    scrollToBottom()
+    if (!initialScrollDone.current) return
+    if (isNearBottom.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
   }, [messages, aiLoading])
+
+  // IntersectionObserver : marquer comme lu quand le bas est visible
+  useEffect(() => {
+    const target = bottomRef.current
+    const container = scrollContainerRef.current
+    if (!target || !container) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          markAsRead()
+        }
+      },
+      { root: container, threshold: 0.1 }
+    )
+
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [markAsRead])
+
+  // Marquer comme lu aussi quand l'onglet redevient visible et qu'on est en bas
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && isNearBottom.current) {
+        markAsRead()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [markAsRead])
 
   const handleSend = async (e) => {
     e.preventDefault()
@@ -143,6 +226,9 @@ export default function ChatPage() {
       profile_id: profile.id,
       content,
     })
+
+    // Marquer comme lu apres envoi (on est forcement en bas)
+    markAsRead()
 
     // Fire-and-forget push notification
     fetch('/api/send-notification', {
@@ -328,13 +414,34 @@ export default function ChatPage() {
     return elements
   }
 
+  // Calculer le nombre de messages non lus et la position du separateur
+  const separatorLastReadAt = lastReadAtRef.current
+  const unreadStartIndex = separatorLastReadAt
+    ? messages.findIndex(
+        (m) =>
+          m.profile_id !== profile.id &&
+          new Date(m.created_at) > new Date(separatorLastReadAt)
+      )
+    : -1
+
+  const unreadCountForSeparator =
+    unreadStartIndex >= 0
+      ? messages.filter(
+          (m, i) => i >= unreadStartIndex && m.profile_id !== profile.id
+        ).length
+      : 0
+
   return (
     <div className="fixed top-14 bottom-16 left-0 right-0 z-40 flex flex-col bg-gray-50 md:static md:z-auto md:max-w-2xl md:mx-auto md:-mt-8 md:-mb-8 md:h-[calc(100dvh-4rem)]">
       <h1 className="hidden md:block text-xl font-bold text-gray-900 px-4 py-3 border-b border-gray-200 shrink-0">
         {t('chat.title')}
       </h1>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
+      >
         {messages.length === 0 && (
           <div className="text-center mt-10 space-y-2">
             <p className="text-gray-400">{t('chat.noMessages')}</p>
@@ -342,60 +449,87 @@ export default function ChatPage() {
           </div>
         )}
 
-        {messages.map((msg) => {
+        {messages.map((msg, index) => {
           const mine = isMine(msg)
           const isAI = msg.is_ai
-
-          if (isAI) {
-            return (
-              <div key={msg.id} className="flex items-end gap-2">
-                <div className="w-7 h-7 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xs shrink-0">
-                  🤖
-                </div>
-                <div className="max-w-[75%] flex flex-col items-start">
-                  <span className="text-xs text-indigo-500 mb-0.5 ml-1 font-medium">Miam</span>
-                  <div className="px-3 py-2 rounded-2xl text-sm leading-relaxed bg-indigo-50 text-indigo-900 rounded-bl-md shadow-sm">
-                    {renderMarkdown(msg.content)}
-                  </div>
-                  <span className="text-[10px] text-gray-400 mt-0.5 ml-1">
-                    {formatTime(msg.created_at)}
-                  </span>
-                </div>
-              </div>
-            )
-          }
-
-          const initial = msg.profiles?.display_name?.charAt(0)?.toUpperCase() || '?'
-          const name = msg.profiles?.display_name || '?'
+          const showSeparator = index === unreadStartIndex && unreadCountForSeparator > 0
 
           return (
-            <div
-              key={msg.id}
-              className={`flex items-end gap-2 ${mine ? 'flex-row-reverse' : ''}`}
-            >
-              {!mine && (
-                <div className="w-7 h-7 rounded-full bg-gray-300 flex items-center justify-center text-white text-xs font-bold shrink-0">
-                  {initial}
+            <div key={msg.id}>
+              {showSeparator && (
+                <div
+                  ref={unreadSeparatorRef}
+                  className="flex items-center gap-3 my-4"
+                >
+                  <div className="flex-1 h-px bg-orange-300" />
+                  <span className="text-xs font-medium text-orange-500 whitespace-nowrap">
+                    {t('chat.unreadMessages', { count: unreadCountForSeparator })}
+                  </span>
+                  <div className="flex-1 h-px bg-orange-300" />
                 </div>
               )}
 
-              <div className={`max-w-[75%] ${mine ? 'items-end' : 'items-start'} flex flex-col`}>
-                {!mine && (
-                  <span className="text-xs text-gray-500 mb-0.5 ml-1">{name}</span>
-                )}
-                <div
-                  className={`px-3 py-2 rounded-2xl text-sm leading-relaxed ${
-                    mine
-                      ? 'bg-orange-500 text-white rounded-br-md'
-                      : 'bg-white text-gray-800 rounded-bl-md shadow-sm'
-                  }`}
-                >
-                  {msg.content}
+              {isAI ? (
+                <div className="flex items-end gap-2">
+                  <div className="w-7 h-7 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xs shrink-0">
+                    🤖
+                  </div>
+                  <div className="max-w-[75%] flex flex-col items-start">
+                    <span className="text-xs text-indigo-500 mb-0.5 ml-1 font-medium">Miam</span>
+                    <div className="px-3 py-2 rounded-2xl text-sm leading-relaxed bg-indigo-50 text-indigo-900 rounded-bl-md shadow-sm">
+                      {renderMarkdown(msg.content)}
+                    </div>
+                    <span className="text-[10px] text-gray-400 mt-0.5 ml-1">
+                      {formatTime(msg.created_at)}
+                    </span>
+                  </div>
                 </div>
-                <span className={`text-[10px] text-gray-400 mt-0.5 ${mine ? 'mr-1' : 'ml-1'}`}>
-                  {formatTime(msg.created_at)}
-                </span>
-              </div>
+              ) : (
+                <>
+                  <div className={`flex items-end gap-2 ${mine ? 'flex-row-reverse' : ''}`}>
+                    {!mine && (
+                      <div className="w-7 h-7 rounded-full bg-gray-300 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                        {msg.profiles?.display_name?.charAt(0)?.toUpperCase() || '?'}
+                      </div>
+                    )}
+
+                    <div className={`max-w-[75%] ${mine ? 'items-end' : 'items-start'} flex flex-col`}>
+                      {!mine && (
+                        <span className="text-xs text-gray-500 mb-0.5 ml-1">
+                          {msg.profiles?.display_name || '?'}
+                        </span>
+                      )}
+                      <div
+                        className={`px-3 py-2 rounded-2xl text-sm leading-relaxed ${
+                          mine
+                            ? 'bg-orange-500 text-white rounded-br-md'
+                            : 'bg-white text-gray-800 rounded-bl-md shadow-sm'
+                        }`}
+                      >
+                        {msg.content}
+                      </div>
+                      <div className={`flex items-center gap-1 mt-0.5 ${mine ? 'mr-1 flex-row-reverse' : 'ml-1'}`}>
+                        <span className="text-[10px] text-gray-400">
+                          {formatTime(msg.created_at)}
+                        </span>
+                        {mine && readAvatarsByMessageId[msg.id] && (
+                          <div className="flex -space-x-1">
+                            {readAvatarsByMessageId[msg.id].map((reader) => (
+                              <div
+                                key={reader.profile_id}
+                                title={reader.display_name}
+                                className="w-4 h-4 rounded-full bg-gray-400 flex items-center justify-center text-white text-[8px] font-bold ring-1 ring-white"
+                              >
+                                {reader.display_name?.charAt(0)?.toUpperCase() || '?'}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )
         })}
