@@ -48,6 +48,18 @@ export function UnreadMessagesProvider({ children }) {
     return ts
   }, [profileId, householdId])
 
+  // Fermer les notifications push liées au chat
+  const clearChatNotifications = useCallback(async () => {
+    if (!('serviceWorker' in navigator)) return
+    try {
+      const reg = await navigator.serviceWorker.ready
+      const notifications = await reg.getNotifications({ tag: 'chat-message' })
+      notifications.forEach((n) => n.close())
+    } catch {
+      // Ignore si non supporté
+    }
+  }, [])
+
   // Marquer comme lu via upsert dans Supabase
   const markAsRead = useCallback(async () => {
     if (!profileId || !householdId) return
@@ -62,7 +74,8 @@ export function UnreadMessagesProvider({ children }) {
 
     lastReadAtState.current = now
     setUnreadCount(0)
-  }, [profileId, householdId])
+    clearChatNotifications()
+  }, [profileId, householdId, clearChatNotifications])
 
   // Charger les read statuses des autres membres du foyer
   const fetchReadStatuses = useCallback(async () => {
@@ -176,7 +189,7 @@ export function UnreadMessagesProvider({ children }) {
   }, [profileId, householdId, fetchLastReadAt, fetchReadStatuses, fetchUnreadCount])
 
   return (
-    <UnreadMessagesContext.Provider value={{ unreadCount, lastReadAtRef, readStatuses, markAsRead }}>
+    <UnreadMessagesContext.Provider value={{ unreadCount, lastReadAtRef, readStatuses, markAsRead, clearChatNotifications }}>
       {children}
     </UnreadMessagesContext.Provider>
   )

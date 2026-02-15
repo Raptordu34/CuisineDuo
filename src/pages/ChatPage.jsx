@@ -21,7 +21,12 @@ export default function ChatPage() {
   const unreadSeparatorRef = useRef(null)
   const scrollContainerRef = useRef(null)
   const initialScrollDone = useRef(false)
-  const { markAsRead, lastReadAtRef, readStatuses } = useUnreadMessages()
+  const { markAsRead, lastReadAtRef, readStatuses, clearChatNotifications } = useUnreadMessages()
+
+  // Fermer les notifications push dès l'arrivée sur la page chat
+  useEffect(() => {
+    clearChatNotifications()
+  }, [clearChatNotifications])
 
   // Calculer pour chaque message "mine" quels membres ont lu jusqu'a ce message
   // On affiche les avatars uniquement sous le dernier message lu par chaque membre

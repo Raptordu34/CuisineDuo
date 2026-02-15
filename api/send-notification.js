@@ -47,7 +47,10 @@ export default async function handler(req, res) {
   await Promise.allSettled(
     subscriptions.map(async (sub) => {
       try {
-        await webpush.sendNotification(sub.subscription, payload)
+        await webpush.sendNotification(sub.subscription, payload, {
+          urgency: 'high',
+          TTL: 3600,
+        })
       } catch (err) {
         if (err.statusCode === 410 || err.statusCode === 404) {
           expiredIds.push(sub.id)

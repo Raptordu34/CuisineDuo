@@ -1,5 +1,10 @@
 # CLAUDE.md - Contexte projet CuisineDuo
 
+## Directives de session
+
+- **Au debut de chaque session**, lire attentivement les fichiers `README.md` et `CONTRIBUTING.md` pour se remettre en contexte des objectifs et des standards du projet.
+- **Fin de branche** : Lorsque l'utilisateur indique "fin de branche" (ou similaire), proceder a la fusion de la branche courante vers `main` en utilisant `git merge --no-ff`. Cela permet de conserver l'historique des commits successifs de la branche tout en gardant une trace claire de la fusion dans `main` (evite le fast-forward).
+
 ## Description du projet
 
 CuisineDuo est une **Progressive Web App (PWA)** de gestion culinaire collaborative pour un foyer. Elle permet a plusieurs membres de gerer ensemble leur inventaire alimentaire, decouvrir et cuisiner des recettes, planifier les repas par un systeme de vote swipe, et communiquer via un chat integre avec un assistant IA nomme **Miam**.
