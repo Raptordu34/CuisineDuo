@@ -624,64 +624,85 @@ export default function ChatPage() {
         />
       )}
 
-      <form onSubmit={handleSend} className="shrink-0 px-3 py-2 md:px-4 md:py-3 border-t border-gray-200 bg-white flex items-end gap-2">
-        <button
-          type="button"
-          onClick={() => setMiamMode(!miamMode)}
-          className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-sm transition-all cursor-pointer ${
+      <form onSubmit={handleSend} className={`shrink-0 border-t bg-white transition-colors ${miamMode ? 'border-indigo-200' : 'border-gray-200'}`}>
+        {/* Zone de texte avec bouton envoyer integre */}
+        <div className="flex items-end gap-2 px-3 pt-2.5 pb-1.5 md:px-4">
+          <div className={`flex-1 min-w-0 flex items-end border rounded-2xl transition-colors ${
             miamMode
-              ? 'bg-indigo-500 text-white shadow-md scale-110'
-              : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
-          }`}
-        >
-          🤖
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowGifPicker(!showGifPicker)}
-          className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-[10px] font-bold bg-gray-100 text-gray-400 hover:bg-gray-200 cursor-pointer"
-        >
-          GIF
-        </button>
-        <textarea
-          ref={textareaRef}
-          rows={1}
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              handleSend(e)
-            }
-          }}
-          placeholder={miamMode ? t('chat.aiPlaceholder') : t('chat.placeholder')}
-          className={`flex-1 min-w-0 border rounded-2xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:border-transparent resize-none leading-normal ${
-            miamMode
-              ? 'border-indigo-300 focus:ring-indigo-400 bg-indigo-50/50'
-              : 'border-gray-300 focus:ring-orange-400'
-          }`}
-          style={{ maxHeight: '120px', overflowY: 'auto' }}
-        />
-        <DictationButton
-          onResult={handleDictationResult}
-          disabled={sending || dictationCorrecting}
-          color={miamMode ? 'indigo' : 'orange'}
-          popoverDirection="up"
-        />
-        {dictationCorrecting && (
-          <span className="shrink-0 text-xs text-gray-400 animate-pulse">{t('dictation.correcting')}</span>
-        )}
-        <button
-          type="submit"
-          disabled={!newMessage.trim() || sending || dictationCorrecting}
-          className={`shrink-0 px-5 py-2 rounded-full text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
-            miamMode
-              ? 'bg-indigo-500 hover:bg-indigo-600'
-              : 'bg-orange-500 hover:bg-orange-600'
-          }`}
-        >
-          {t('chat.send')}
-        </button>
+              ? 'border-indigo-300 bg-indigo-50/50 focus-within:ring-2 focus-within:ring-indigo-400 focus-within:border-transparent'
+              : 'border-gray-300 focus-within:ring-2 focus-within:ring-orange-400 focus-within:border-transparent'
+          }`}>
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  handleSend(e)
+                }
+              }}
+              placeholder={miamMode ? t('chat.aiPlaceholder') : t('chat.placeholder')}
+              className="flex-1 min-w-0 bg-transparent px-4 py-2.5 text-sm focus:outline-none resize-none leading-normal"
+              style={{ maxHeight: '120px', overflowY: 'auto' }}
+            />
+            <button
+              type="submit"
+              disabled={!newMessage.trim() || sending || dictationCorrecting}
+              className={`shrink-0 w-8 h-8 m-1 rounded-full flex items-center justify-center text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer ${
+                miamMode
+                  ? 'bg-indigo-500 hover:bg-indigo-600'
+                  : 'bg-orange-500 hover:bg-orange-600'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path d="M3.105 2.288a.75.75 0 0 0-.826.95l1.414 4.926A1.5 1.5 0 0 0 5.135 9.25h6.115a.75.75 0 0 1 0 1.5H5.135a1.5 1.5 0 0 0-1.442 1.086l-1.414 4.926a.75.75 0 0 0 .826.95l14.095-5.637a.75.75 0 0 0 0-1.4L3.105 2.288Z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Barre d'actions */}
+        <div className="flex items-center gap-1 px-3 pb-2.5 md:px-4">
+          {/* Bouton Miam */}
+          <button
+            type="button"
+            onClick={() => setMiamMode(!miamMode)}
+            className={`shrink-0 h-8 px-2.5 rounded-full flex items-center justify-center gap-1 text-xs font-medium transition-all cursor-pointer ${
+              miamMode
+                ? 'bg-indigo-500 text-white shadow-sm'
+                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            }`}
+          >
+            <span className="text-sm">🤖</span>
+            <span className="hidden sm:inline">Miam</span>
+          </button>
+
+          {/* Bouton GIF */}
+          <button
+            type="button"
+            onClick={() => setShowGifPicker(!showGifPicker)}
+            className={`shrink-0 h-8 px-2.5 rounded-full flex items-center justify-center text-xs font-bold transition-colors cursor-pointer ${
+              showGifPicker
+                ? 'bg-orange-500 text-white'
+                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            }`}
+          >
+            GIF
+          </button>
+
+          {/* Dictation */}
+          <DictationButton
+            onResult={handleDictationResult}
+            disabled={sending || dictationCorrecting}
+            color={miamMode ? 'indigo' : 'orange'}
+            popoverDirection="up"
+          />
+          {dictationCorrecting && (
+            <span className="shrink-0 text-xs text-gray-400 animate-pulse">{t('dictation.correcting')}</span>
+          )}
+        </div>
       </form>
     </div>
   )
