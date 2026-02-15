@@ -25,6 +25,11 @@ export const translations = {
     'chat.gifLoadMore': 'Voir plus',
     'chat.gifPoweredBy': 'Propulse par {{source}}',
     'chat.gifNoResults': 'Aucun GIF trouve',
+    'chat.gifSuggestions': 'Suggestions',
+    'chat.gifHistory': 'Historique',
+    'chat.gifNoSuggestions': 'Aucune suggestion pour le moment',
+    'chat.gifNoHistory': 'Pas encore de GIF envoye',
+    'chat.gifClearSearch': "Effacer l'historique",
 
     // Login
     'login.whoIsIt': 'Qui est-ce ?',
@@ -204,6 +209,11 @@ export const translations = {
     'chat.gifLoadMore': 'Load more',
     'chat.gifPoweredBy': 'Powered by {{source}}',
     'chat.gifNoResults': 'No GIFs found',
+    'chat.gifSuggestions': 'Suggestions',
+    'chat.gifHistory': 'History',
+    'chat.gifNoSuggestions': 'No suggestions at the moment',
+    'chat.gifNoHistory': 'No GIFs sent yet',
+    'chat.gifClearSearch': 'Clear history',
 
     // Login
     'login.whoIsIt': 'Who is this?',
@@ -383,6 +393,11 @@ export const translations = {
     'chat.gifLoadMore': '\u52a0\u8f7d\u66f4\u591a',
     'chat.gifPoweredBy': '\u7531 {{source}} \u63d0\u4f9b',
     'chat.gifNoResults': '\u672a\u627e\u5230GIF',
+    'chat.gifSuggestions': '\u63a8\u8350',
+    'chat.gifHistory': '\u5386\u53f2',
+    'chat.gifNoSuggestions': '\u6682\u65e0\u63a8\u8350',
+    'chat.gifNoHistory': '\u8fd8\u6ca1\u6709\u53d1\u9001\u8fc7GIF',
+    'chat.gifClearSearch': '\u6e05\u9664\u5386\u53f2',
 
     // Login
     'login.whoIsIt': '\u4f60\u662f\u8c01\uff1f',

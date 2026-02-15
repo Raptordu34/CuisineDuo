@@ -304,7 +304,7 @@ export default function ChatPage() {
     }
   }
 
-  const handleGifSelect = async (gifUrl) => {
+  const handleGifSelect = async (gif) => {
     setShowGifPicker(false)
     setSending(true)
 
@@ -316,7 +316,9 @@ export default function ChatPage() {
       profile_id: profile.id,
       content: '',
       message_type: 'gif',
-      media_url: gifUrl,
+      media_url: gif.url,
+      gif_title: gif.title,
+      giphy_id: gif.id,
     })
 
     markAsRead()
@@ -617,6 +619,8 @@ export default function ChatPage() {
         <GifPicker
           onSelect={handleGifSelect}
           onClose={() => setShowGifPicker(false)}
+          messages={messages}
+          profile={profile}
         />
       )}
 
