@@ -19,6 +19,12 @@ export const translations = {
     'chat.aiHint': 'Tapez @Miam pour poser une question culinaire',
     'chat.aiPlaceholder': 'Demandez a Miam...',
     'chat.unreadMessages': '{{count}} message(s) non lu(s)',
+    'chat.sentGif': 'a envoye un GIF',
+    'chat.gifSearch': 'Rechercher des GIFs...',
+    'chat.gifTrending': 'Tendances',
+    'chat.gifLoadMore': 'Voir plus',
+    'chat.gifPoweredBy': 'Propulse par {{source}}',
+    'chat.gifNoResults': 'Aucun GIF trouve',
 
     // Login
     'login.whoIsIt': 'Qui est-ce ?',
@@ -192,6 +198,12 @@ export const translations = {
     'chat.aiHint': 'Type @Miam to ask a cooking question',
     'chat.aiPlaceholder': 'Ask Miam...',
     'chat.unreadMessages': '{{count}} unread message(s)',
+    'chat.sentGif': 'sent a GIF',
+    'chat.gifSearch': 'Search GIFs...',
+    'chat.gifTrending': 'Trending',
+    'chat.gifLoadMore': 'Load more',
+    'chat.gifPoweredBy': 'Powered by {{source}}',
+    'chat.gifNoResults': 'No GIFs found',
 
     // Login
     'login.whoIsIt': 'Who is this?',
@@ -365,6 +377,12 @@ export const translations = {
     'chat.aiHint': '\u8f93\u5165@Miam\u63d0\u95ee',
     'chat.aiPlaceholder': '\u95ee Miam...',
     'chat.unreadMessages': '{{count}} \u6761\u672a\u8bfb\u6d88\u606f',
+    'chat.sentGif': '\u53d1\u9001\u4e86\u4e00\u5f20GIF',
+    'chat.gifSearch': '\u641c\u7d22GIF...',
+    'chat.gifTrending': '\u70ed\u95e8',
+    'chat.gifLoadMore': '\u52a0\u8f7d\u66f4\u591a',
+    'chat.gifPoweredBy': '\u7531 {{source}} \u63d0\u4f9b',
+    'chat.gifNoResults': '\u672a\u627e\u5230GIF',
 
     // Login
     'login.whoIsIt': '\u4f60\u662f\u8c01\uff1f',

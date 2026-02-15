@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import DictationButton from '../components/DictationButton'
 import DictationTrace from '../components/DictationTrace'
+import GifPicker from '../components/chat/GifPicker'
 import { useUnreadMessages } from '../contexts/UnreadMessagesContext'
 
 export default function ChatPage() {
@@ -16,6 +17,7 @@ export default function ChatPage() {
   const [miamMode, setMiamMode] = useState(false)
   const [dictationCorrecting, setDictationCorrecting] = useState(false)
   const [dictationTrace, setDictationTrace] = useState(null)
+  const [showGifPicker, setShowGifPicker] = useState(false)
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
   const unreadSeparatorRef = useRef(null)
@@ -302,6 +304,37 @@ export default function ChatPage() {
     }
   }
 
+  const handleGifSelect = async (gifUrl) => {
+    setShowGifPicker(false)
+    setSending(true)
+
+    // Forcer le scroll en bas apres l'envoi du GIF
+    isNearBottom.current = true
+
+    await supabase.from('messages').insert({
+      household_id: profile.household_id,
+      profile_id: profile.id,
+      content: '',
+      message_type: 'gif',
+      media_url: gifUrl,
+    })
+
+    markAsRead()
+
+    fetch('/api/send-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        household_id: profile.household_id,
+        sender_profile_id: profile.id,
+        title: profile.display_name,
+        body: t('chat.sentGif'),
+      }),
+    }).catch(() => {})
+
+    setSending(false)
+  }
+
   const formatTime = (dateStr) => {
     const date = new Date(dateStr)
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -507,13 +540,27 @@ export default function ChatPage() {
                         </span>
                       )}
                       <div
-                        className={`px-3 py-2 rounded-2xl text-sm leading-relaxed ${
+                        className={`rounded-2xl text-sm leading-relaxed ${
+                          msg.message_type === 'gif'
+                            ? 'p-1 overflow-hidden'
+                            : 'px-3 py-2'
+                        } ${
                           mine
                             ? 'bg-orange-500 text-white rounded-br-md'
                             : 'bg-white text-gray-800 rounded-bl-md shadow-sm'
                         }`}
                       >
-                        {msg.content}
+                        {msg.message_type === 'gif' && msg.media_url ? (
+                          <img
+                            src={msg.media_url}
+                            alt="GIF"
+                            className="rounded-xl max-w-full"
+                            style={{ maxHeight: '200px' }}
+                            loading="lazy"
+                          />
+                        ) : (
+                          msg.content
+                        )}
                       </div>
                       <div className={`flex items-center gap-1 mt-0.5 ${mine ? 'mr-1 flex-row-reverse' : 'ml-1'}`}>
                         <span className="text-[10px] text-gray-400">
@@ -566,6 +613,13 @@ export default function ChatPage() {
         </div>
       )}
 
+      {showGifPicker && (
+        <GifPicker
+          onSelect={handleGifSelect}
+          onClose={() => setShowGifPicker(false)}
+        />
+      )}
+
       <form onSubmit={handleSend} className="shrink-0 px-3 py-2 md:px-4 md:py-3 border-t border-gray-200 bg-white flex items-end gap-2">
         <button
           type="button"
@@ -577,6 +631,13 @@ export default function ChatPage() {
           }`}
         >
           🤖
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowGifPicker(!showGifPicker)}
+          className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-[10px] font-bold bg-gray-100 text-gray-400 hover:bg-gray-200 cursor-pointer"
+        >
+          GIF
         </button>
         <textarea
           ref={textareaRef}
