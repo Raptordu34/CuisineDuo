@@ -4,6 +4,8 @@ import { useLanguage } from '../../contexts/LanguageContext'
 import { useLongPress } from '../../hooks/useLongPress'
 import { useDictation } from '../../hooks/useDictation'
 
+// Keep lang fresh via ref to avoid stale closures in useLongPress timeout
+
 function MiamIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7">
@@ -26,6 +28,11 @@ export default function MiamFAB() {
   const { isListening, transcript, startListening, stopListening, isSupported } = useDictation()
   const [isVoiceMode, setIsVoiceMode] = useState(false)
   const transcriptRef = useRef('')
+  const langRef = useRef(lang)
+
+  useEffect(() => {
+    langRef.current = lang
+  }, [lang])
 
   // Use the DictationButton's pattern: track transcript via ref, send on result
   const handleDictationResult = useCallback((finalTranscript) => {
@@ -53,8 +60,8 @@ export default function MiamFAB() {
     setIsVoiceMode(true)
     setIsVoiceActive(true)
     transcriptRef.current = ''
-    startListening(lang)
-  }, [isSupported, openSheet, setIsVoiceActive, startListening, lang])
+    startListening(langRef.current)
+  }, [isSupported, openSheet, setIsVoiceActive, startListening])
 
   const longPressProps = useLongPress(handleLongPress, { delay: 400 })
 

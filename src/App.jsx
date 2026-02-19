@@ -10,6 +10,7 @@ import OnboardingPage from './pages/OnboardingPage'
 import HomePage from './pages/HomePage'
 import ChatPage from './pages/ChatPage'
 import InventoryPage from './pages/InventoryPage'
+import AILogsPage from './pages/AILogsPage'
 
 function App() {
   return (
@@ -48,6 +49,14 @@ function App() {
                 <Layout>
                   <ChatPage />
                 </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ai-logs"
+            element={
+              <ProtectedRoute>
+                <AILogsPage />
               </ProtectedRoute>
             }
           />

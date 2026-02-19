@@ -361,13 +361,27 @@ export function MiamProvider({ children }) {
       }
       setMessages(prev => [...prev, miamMessage])
 
-      // Log interaction IA
+      // Log interaction IA (avec debug complet si disponible)
       logAI({
         householdId: profile?.household_id,
         profileId: profile?.id,
         endpoint: 'miam-orchestrator',
-        input: { message: text, currentPage, availableActions },
-        output: { response: data.response, actions: data.actions },
+        input: {
+          message: text,
+          currentPage,
+          availableActions,
+          systemPrompt: data.debug?.systemPrompt,
+          toolDeclarations: data.debug?.toolDeclarations,
+          conversationHistory: data.debug?.conversationHistory,
+          model: data.debug?.model,
+          generationConfig: data.debug?.generationConfig,
+        },
+        output: {
+          response: data.response,
+          actions: data.actions,
+          executedActions,
+          rawResponse: data.debug?.rawResponse,
+        },
         durationMs,
       })
 

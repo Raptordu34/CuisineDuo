@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const MAX_OUTPUT_TOKENS = 500
-const TEMPERATURE = 0.7
+const TEMPERATURE = 0.3
 
 // Toutes les declarations de fonctions disponibles
 const ALL_TOOL_DECLARATIONS = [
@@ -152,7 +152,7 @@ const ALL_TOOL_DECLARATIONS = [
 ]
 
 // Actions toujours disponibles, quel que soit l'onglet actif
-const ALWAYS_AVAILABLE = ['navigate', 'sendChatMessage', 'editLastChatMessage', 'deleteLastChatMessage', 'addInventoryItem']
+const ALWAYS_AVAILABLE = ['navigate', 'sendChatMessage', 'editLastChatMessage', 'deleteLastChatMessage', 'addInventoryItem', 'updateInventoryItem', 'consumeInventoryItem', 'deleteInventoryItem']
 
 function buildSystemPrompt(lang, currentPage, context, availableActions) {
   const pageNames = { home: 'accueil/dashboard', inventory: 'inventaire alimentaire', chat: 'chat du foyer' }
@@ -172,62 +172,87 @@ function buildSystemPrompt(lang, currentPage, context, availableActions) {
     ? `- Inventaire (${context.inventoryItems.length} articles): ${context.inventoryItems.slice(0, 20).map(i => `${i.name}${i.brand ? ' (' + i.brand + ')' : ''}`).join(', ')}${context.inventoryItems.length > 20 ? '...' : ''}\n`
     : ''
 
+  const categoryGuide = `
+CORRESPONDANCES CATEGORIE (a utiliser pour les suppositions):
+- Laitier/dairy: yaourt, fromage, lait, beurre, creme, oeuf
+- Viande/meat: poulet, boeuf, porc, agneau, veau, dinde, jambon, saucisse
+- Poisson/fish: saumon, thon, cabillaud, crevette, moule
+- Legumes/vegetables: tomate, carotte, poireau, courgette, salade, oignon, ail, brocoli, poivron
+- Fruits/fruits: pomme, banane, orange, fraise, raisin, peche, poire
+- Feculent/grains: riz, pates, farine, pain, cereales, avoine, lentille, pois
+- Boulangerie/bakery: pain, baguette, brioche, croissant, gateau, biscuit
+- Surgele/frozen: pizza, glace, surimi
+- Boisson/beverages: eau, jus, soda, biere, vin, cafe, the
+- Snack/snacks: chips, bonbon, chocolat, noix, graine
+- Condiment/condiments: sel, sucre, huile, vinaigre, sauce, mayonnaise, moutarde, ketchup, epice
+- Autre/other: tout le reste`
+
   const prompts = {
     fr: `Tu es Miam, l'assistant culinaire intelligent de CuisineDuo.
 Tu aides ${context.profileName || 'l\'utilisateur'} a gerer son inventaire alimentaire, trouver des idees de recettes, et naviguer dans l'application.
 
 CONTEXTE ACTUEL:
 - Page active: ${pageName}
-${memberSection}${inventorySection}- Actions disponibles que tu peux executer:
+${memberSection}${inventorySection}
+ACTIONS DISPONIBLES:
 ${actionDescriptions}
 
-INSTRUCTIONS:
-- Sois concis et chaleureux.
-- Utilise les actions (function calling) quand c'est pertinent pour repondre a la demande.
+REGLES ABSOLUES — NE JAMAIS ENFREINDRE:
+1. AGIS TOUJOURS IMMEDIATEMENT via function calling. Ne dis JAMAIS que tu vas faire quelque chose sans appeler la fonction correspondante dans le meme message. "J'ajoute les yaourts" sans appeler addInventoryItem = INTERDIT.
+2. Ne pose JAMAIS de question de confirmation avant d'agir (pas de "Es-tu sur ?", "De quelle categorie ?", etc.).
+3. Si des infos manquent (categorie, unite, quantite), fais des suppositions intelligentes immediatement. Exemple: "yaourt" → dairy, piece; "lait" → dairy, l; "pates" → grains, pack. Ne bloque jamais sur une info manquante.
+4. Pour supprimer/consommer un item: agis directement. Si ambigu entre delete et consume, prefere consumeInventoryItem.
+5. Sois tres concis dans ta reponse texte (1 phrase max). L'action parle d'elle-meme.
+${categoryGuide}
+
+AUTRES INSTRUCTIONS:
 - Si l'utilisateur demande d'aller quelque part, utilise navigate.
-- Si l'utilisateur est sur une page differente de celle ou se trouve la fonctionnalite, navigue d'abord puis execute l'action.
-- Pour openScanner: utilise source="camera" par defaut. Utilise source="gallery" seulement si l'utilisateur dit explicitement "depuis ma galerie" ou "depuis mes photos".
-- Pour editLastChatMessage/deleteLastChatMessage: utilise ces actions si Miam a envoye un message incorrect et l'utilisateur veut le corriger ou le supprimer.
-- Pour les actions inventaire (addInventoryItem, updateInventoryItem, consumeInventoryItem): agis directement sans naviguer.
-- Reponds toujours en francais.
-- Si tu executes une action, explique brievement ce que tu fais.`,
+- Pour openScanner: source="camera" par defaut, source="gallery" seulement si explicitement demande.
+- Reponds toujours en francais.`,
 
     en: `You are Miam, CuisineDuo's smart culinary assistant.
 You help ${context.profileName || 'the user'} manage their food inventory, find recipe ideas, and navigate the app.
 
 CURRENT CONTEXT:
 - Active page: ${pageName}
-${memberSection}${inventorySection}- Available actions you can execute:
+${memberSection}${inventorySection}
+AVAILABLE ACTIONS:
 ${actionDescriptions}
 
-INSTRUCTIONS:
-- Be concise and warm.
-- Use actions (function calling) when relevant to fulfill the request.
+ABSOLUTE RULES — NEVER BREAK THESE:
+1. ALWAYS ACT IMMEDIATELY via function calling. NEVER say you will do something without calling the corresponding function in the same message. Saying "I'll add the yogurts" without calling addInventoryItem = FORBIDDEN.
+2. NEVER ask confirmation questions before acting (no "Are you sure?", "What category?", etc.).
+3. If info is missing (category, unit, quantity), make smart assumptions immediately. Example: "yogurt" → dairy, piece; "milk" → dairy, l; "pasta" → grains, pack. Never block on missing info.
+4. For delete/consume: act directly. When ambiguous between delete and consume, prefer consumeInventoryItem.
+5. Keep your text response very short (1 sentence max). The action speaks for itself.
+${categoryGuide}
+
+OTHER INSTRUCTIONS:
 - If the user asks to go somewhere, use navigate.
-- If the user is on a different page from where the feature is, navigate first then execute the action.
-- For openScanner: use source="camera" by default. Only use source="gallery" if user explicitly says "from gallery" or "from my photos".
-- For editLastChatMessage/deleteLastChatMessage: use these if Miam sent an incorrect message and user wants to fix or remove it.
-- For inventory actions (addInventoryItem, updateInventoryItem, consumeInventoryItem): act directly without navigating.
-- Always respond in English.
-- If you execute an action, briefly explain what you're doing.`,
+- For openScanner: use source="camera" by default, source="gallery" only if explicitly asked.
+- Always respond in English.`,
 
     zh: `你是Miam，CuisineDuo的智能烹饪助手。
 你帮助${context.profileName || '用户'}管理食物库存、寻找食谱创意和导航应用。
 
 当前上下文:
 - 活动页面: ${pageName}
-${memberSection}${inventorySection}- 你可以执行的可用操作:
+${memberSection}${inventorySection}
+可用操作:
 ${actionDescriptions}
 
-指示:
-- 简洁而温暖。
-- 在相关时使用操作（函数调用）来满足请求。
+绝对规则 — 永远不要违反:
+1. 始终通过函数调用立即行动。永远不要说你会做某事而不在同一条消息中调用相应的函数。
+2. 行动前永远不要问确认问题。
+3. 如果信息缺失（类别、单位、数量），立即做出智能假设。例如："酸奶" → dairy, piece；"牛奶" → dairy, l。
+4. 对于删除/消费：直接行动。模糊时优先使用consumeInventoryItem。
+5. 文本回复非常简短（最多1句话）。
+${categoryGuide}
+
+其他指示:
 - 如果用户要求去某个地方，使用navigate。
-- 如果用户在不同的页面，先导航然后执行操作。
-- 对于openScanner：默认使用source="camera"。只有当用户明确说"从相册"时才使用source="gallery"。
-- 对于库存操作：直接执行，无需导航。
-- 始终用中文回复。
-- 如果你执行了操作，简要说明你在做什么。`,
+- 对于openScanner：默认source="camera"。
+- 始终用中文回复。`,
   }
 
   return prompts[lang] || prompts.fr
@@ -255,24 +280,69 @@ export default async function handler(req, res) {
     t => ALWAYS_AVAILABLE.includes(t.name) || safeAvailableActions.includes(t.name)
   )
 
+  const systemPrompt = buildSystemPrompt(lang || 'fr', currentPage || 'home', safeContext, safeAvailableActions)
+
   const genAI = new GoogleGenerativeAI(apiKey)
   const model = genAI.getGenerativeModel({
     model: 'gemini-2.0-flash',
-    systemInstruction: buildSystemPrompt(lang || 'fr', currentPage || 'home', safeContext, safeAvailableActions),
+    systemInstruction: systemPrompt,
     tools: [{ functionDeclarations: filteredDeclarations }],
   })
 
-  // Formater l'historique
+  // Formater l'historique en respectant le format Gemini pour le function calling.
+  // Un tour Miam avec actions doit être décomposé en :
+  //   1. model[functionCall parts]
+  //   2. user[functionResponse parts]   ← requis par l'API Gemini
+  //   3. model[text]                     ← réponse textuelle (si présente)
   const safeHistory = Array.isArray(conversationHistory) ? conversationHistory : []
-  const formattedHistory = safeHistory.slice(-10).map(msg => ({
-    role: msg.role === 'miam' ? 'model' : 'user',
-    parts: [{ text: msg.content || '' }],
-  })).filter(msg => msg.parts[0].text)
+  const formattedHistory = []
+  for (const msg of safeHistory.slice(-20)) {
+    if (msg.role === 'miam' || msg.role === 'model') {
+      const hasActions = Array.isArray(msg.actions) && msg.actions.length > 0
+      if (hasActions) {
+        // Turn 1 : appels de fonction du modèle
+        formattedHistory.push({
+          role: 'model',
+          parts: msg.actions.map(a => ({
+            functionCall: { name: a.name, args: a.args || {} },
+          })),
+        })
+        // Turn 2 : réponses des fonctions (côté "user" dans le protocole Gemini)
+        formattedHistory.push({
+          role: 'user',
+          parts: msg.actions.map(a => ({
+            functionResponse: {
+              name: a.name,
+              response: a.result || { success: true },
+            },
+          })),
+        })
+        // Turn 3 : réponse textuelle du modèle (si présente)
+        if (msg.content) {
+          formattedHistory.push({ role: 'model', parts: [{ text: msg.content }] })
+        }
+      } else if (msg.content) {
+        formattedHistory.push({ role: 'model', parts: [{ text: msg.content }] })
+      }
+    } else {
+      // Message utilisateur
+      if (msg.content) {
+        formattedHistory.push({ role: 'user', parts: [{ text: msg.content }] })
+      }
+    }
+  }
+  // Gemini exige que l'historique commence par un tour "user" et alterne user/model
+  // On retire les éventuels tours model en tête de liste
+  while (formattedHistory.length > 0 && formattedHistory[0].role !== 'user') {
+    formattedHistory.shift()
+  }
+
+  const generationConfig = { maxOutputTokens: MAX_OUTPUT_TOKENS, temperature: TEMPERATURE }
 
   try {
     const chat = model.startChat({
       history: formattedHistory,
-      generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS, temperature: TEMPERATURE },
+      generationConfig,
     })
 
     const result = await chat.sendMessage(message)
@@ -298,9 +368,21 @@ export default async function handler(req, res) {
 
     const responseText = textParts.join('\n').trim()
 
+    // Debug data for logging
+    const debug = {
+      systemPrompt,
+      toolDeclarations: filteredDeclarations.map(d => d.name),
+      conversationHistory: formattedHistory,
+      model: 'gemini-2.0-flash',
+      generationConfig,
+      rawResponse: response.candidates || [],
+      userMessage: message,
+    }
+
     return res.status(200).json({
       response: responseText || (actions.length > 0 ? getDefaultActionMessage(actions, lang || 'fr') : ''),
       actions,
+      debug,
     })
   } catch (error) {
     console.error('Miam orchestrator error:', error)
