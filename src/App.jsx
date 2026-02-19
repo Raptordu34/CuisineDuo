@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { LanguageProvider } from './contexts/LanguageContext'
 import { AuthProvider } from './contexts/AuthContext'
 import { UnreadMessagesProvider } from './contexts/UnreadMessagesContext'
+import { MiamProvider } from './contexts/MiamContext'
 import Layout from './components/layout/Layout'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import LoginPage from './pages/LoginPage'
@@ -9,6 +10,7 @@ import OnboardingPage from './pages/OnboardingPage'
 import HomePage from './pages/HomePage'
 import ChatPage from './pages/ChatPage'
 import InventoryPage from './pages/InventoryPage'
+import AILogsPage from './pages/AILogsPage'
 
 function App() {
   return (
@@ -16,6 +18,7 @@ function App() {
       <LanguageProvider>
       <AuthProvider>
       <UnreadMessagesProvider>
+      <MiamProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
@@ -49,7 +52,16 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/ai-logs"
+            element={
+              <ProtectedRoute>
+                <AILogsPage />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
+      </MiamProvider>
       </UnreadMessagesProvider>
       </AuthProvider>
       </LanguageProvider>

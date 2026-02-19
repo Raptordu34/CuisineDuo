@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useMiamActions } from '../hooks/useMiamActions'
+import { useMiam } from '../contexts/MiamContext'
 import CategoryFilter from '../components/inventory/CategoryFilter'
 import InventoryList from '../components/inventory/InventoryList'
 import AddItemModal from '../components/inventory/AddItemModal'
@@ -9,8 +11,6 @@ import EditItemModal from '../components/inventory/EditItemModal'
 import ConsumeModal from '../components/inventory/ConsumeModal'
 import ScanReceiptButton from '../components/inventory/ScanReceiptButton'
 import ScanReviewModal from '../components/inventory/ScanReviewModal'
-import DictationButton from '../components/DictationButton'
-import DictationTrace from '../components/DictationTrace'
 
 function toKg(q, u) {
   if (u === 'kg' || u === 'l') return q
@@ -32,7 +32,8 @@ function autoPriceCalc(row) {
 
 export default function InventoryPage() {
   const { profile } = useAuth()
-  const { t, lang } = useLanguage()
+  const { t } = useLanguage()
+  const { registerContextProvider } = useMiam()
   const [items, setItems] = useState([])
   const [category, setCategory] = useState('all')
   const [showAddModal, setShowAddModal] = useState(false)
@@ -44,9 +45,33 @@ export default function InventoryPage() {
   // Phase 4: Selection mode
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState(new Set())
-  const [dictationCorrecting, setDictationCorrecting] = useState(false)
-  const [dictationTrace, setDictationTrace] = useState(null)
   const [toastMessage, setToastMessage] = useState(null)
+  const scanTriggerRef = useRef(null)
+
+  // Miam orchestrator: register available actions
+  useMiamActions({
+    openAddItem: {
+      handler: () => setShowAddModal(true),
+      description: 'Open add item modal',
+    },
+    openScanner: {
+      handler: ({ source = 'camera', mode = 'auto' } = {}) => {
+        scanTriggerRef.current?.({ source, mode })
+      },
+      description: 'Open receipt scanner',
+    },
+    filterCategory: {
+      handler: ({ category: cat }) => setCategory(cat === 'all' ? 'all' : cat),
+      description: 'Filter inventory by category',
+    },
+  })
+
+  // Fournir le contexte inventaire à Miam (liste d'articles pour updateInventoryItem/consumeInventoryItem)
+  useEffect(() => {
+    return registerContextProvider('inventoryItems', () =>
+      items.map(i => ({ id: i.id, name: i.name, brand: i.brand, category: i.category }))
+    )
+  }, [registerContextProvider, items])
 
   useEffect(() => {
     if (!profile?.household_id) return
@@ -240,109 +265,6 @@ export default function InventoryPage() {
     setSelectedIds(new Set())
   }
 
-  // Phase 4: Determine scope items for dictation
-  const getScopeItems = useCallback(() => {
-    if (selectionMode && selectedIds.size > 0) {
-      return items.filter((i) => selectedIds.has(i.id))
-    }
-    if (category !== 'all') {
-      return items.filter((i) => i.category === category)
-    }
-    return items
-  }, [selectionMode, selectedIds, items, category])
-
-  // Phase 4: Inventory dictation handler
-  const handleInventoryDictation = useCallback(async (text, dictLang) => {
-    if (!text.trim()) return
-    setDictationCorrecting(true)
-
-    const scopeItems = getScopeItems().map((i) => ({
-      item_id: i.id,
-      name: i.name,
-      brand: i.brand,
-      quantity: i.quantity,
-      unit: i.unit,
-      fill_level: i.fill_level ?? 1,
-      category: i.category,
-    }))
-
-    try {
-      const res = await fetch('/api/correct-transcription', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text,
-          context: 'inventory-update',
-          lang: dictLang || lang,
-          items: scopeItems,
-        }),
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-
-        setDictationTrace({
-          rawTranscript: text,
-          correctedResult: data.summary || JSON.stringify(data.updates),
-          timestamp: Date.now(),
-        })
-
-        if (data.updates && Array.isArray(data.updates)) {
-          for (const update of data.updates) {
-            if (update.action === 'consumed' && update.item_id) {
-              const item = items.find((i) => i.id === update.item_id)
-              if (item) {
-                await supabase.from('consumed_items').insert({
-                  household_id: item.household_id,
-                  name: item.name,
-                  brand: item.brand || null,
-                  quantity: item.quantity,
-                  unit: item.unit,
-                  price: item.price,
-                  price_per_kg: item.price_per_kg ?? null,
-                  price_estimated: item.price_estimated === true,
-                  category: item.category,
-                  purchase_date: item.purchase_date,
-                  store: item.store,
-                  notes: item.notes,
-                  added_by: item.added_by,
-                  consumed_by: profile.id,
-                  fill_level: item.fill_level ?? 1,
-                })
-                await supabase.from('inventory_items').delete().eq('id', item.id)
-              }
-            } else if (update.action === 'update' && update.item_id && update.fields) {
-              const allowed = ['name', 'brand', 'quantity', 'unit', 'price', 'price_per_kg', 'price_estimated', 'fill_level', 'category', 'store', 'notes', 'estimated_expiry_date']
-              const payload = {}
-              for (const key of allowed) {
-                if (update.fields[key] !== undefined) payload[key] = update.fields[key]
-              }
-              if (Object.keys(payload).length > 0) {
-                const item = items.find((i) => i.id === update.item_id)
-                const merged = autoPriceCalc({
-                  quantity: payload.quantity ?? item?.quantity,
-                  unit: payload.unit ?? item?.unit,
-                  price: payload.price !== undefined ? payload.price : (item?.price ?? null),
-                  price_per_kg: payload.price_per_kg !== undefined ? payload.price_per_kg : (item?.price_per_kg ?? null),
-                })
-                if (merged.price_per_kg != null && payload.price_per_kg === undefined) payload.price_per_kg = merged.price_per_kg
-                if (merged.price != null && payload.price === undefined) payload.price = merged.price
-                await supabase
-                  .from('inventory_items')
-                  .update(payload)
-                  .eq('id', update.item_id)
-              }
-            }
-          }
-        }
-      }
-    } catch {
-      // silently fail
-    } finally {
-      setDictationCorrecting(false)
-      if (selectionMode) exitSelectionMode()
-    }
-  }, [getScopeItems, lang, items, profile, selectionMode])
 
   return (
     <div className="fixed top-14 bottom-16 left-0 right-0 z-40 flex flex-col bg-gray-50 md:static md:z-auto md:max-w-5xl md:mx-auto md:-mt-8 md:-mb-8 md:h-[calc(100dvh-4rem)]">
@@ -350,14 +272,6 @@ export default function InventoryPage() {
       <div className="shrink-0 px-3 pt-3 pb-2 flex items-center justify-between gap-2 min-w-0">
         <div className="flex items-center gap-1.5 min-w-0 shrink">
           <h1 className="text-lg font-bold text-gray-900 truncate">{t('inventory.title')}</h1>
-          <DictationButton
-            onResult={handleInventoryDictation}
-            disabled={dictationCorrecting}
-            color="orange"
-          />
-          {dictationCorrecting && (
-            <span className="text-xs text-gray-400 animate-pulse shrink-0">{t('dictation.correcting')}</span>
-          )}
         </div>
         {selectionMode ? (
           <div className="flex items-center gap-2 shrink-0">
@@ -382,17 +296,10 @@ export default function InventoryPage() {
               </svg>
               {t('inventory.add')}
             </button>
-            <ScanReceiptButton onScanComplete={handleScanComplete} onError={(msg) => { setToastMessage(msg); setTimeout(() => setToastMessage(null), 5000) }} />
+            <ScanReceiptButton onScanComplete={handleScanComplete} onError={(msg) => { setToastMessage(msg); setTimeout(() => setToastMessage(null), 5000) }} scanTriggerRef={scanTriggerRef} />
           </div>
         )}
       </div>
-
-      {/* Dictation trace */}
-      {dictationTrace && (
-        <div className="shrink-0 px-3">
-          <DictationTrace trace={dictationTrace} />
-        </div>
-      )}
 
       {/* Category filter */}
       <div className="shrink-0 px-3 pb-2">

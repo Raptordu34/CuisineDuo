@@ -117,6 +117,10 @@ export default function GifPicker({ onSelect, onClose, messages, profile }) {
         .limit(50)
 
       const aggregated = aggregateGifHistory(gifHistoryData || [])
+      const recentGifs = (gifHistoryData || [])
+        .slice(0, 5)
+        .map(g => g.gif_title)
+        .filter(Boolean)
 
       // Preparer le contexte conversation
       const safeMessages = Array.isArray(messages) ? messages : []
@@ -131,6 +135,7 @@ export default function GifPicker({ onSelect, onClose, messages, profile }) {
         body: JSON.stringify({
           messages: contextMessages,
           gifHistory: aggregated,
+          recentGifs,
           lang,
         }),
       })

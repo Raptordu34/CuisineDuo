@@ -190,6 +190,27 @@ export const translations = {
 
     // Common
     'common.loading': 'Chargement...',
+
+    // Miam Orchestrator
+    'miam.fab.tooltip': 'Parler a Miam',
+    'miam.sheet.title': 'Miam',
+    'miam.sheet.placeholder': 'Demandez quelque chose a Miam...',
+    'miam.sheet.clear': 'Effacer la conversation',
+    'miam.thinking': 'Miam reflechit...',
+    'miam.error': 'Desole, je n\'ai pas pu repondre. Reessayez.',
+    'miam.welcome': 'Bonjour ! Je suis Miam, votre assistant culinaire. Comment puis-je vous aider ?',
+    'miam.action.navigated': 'Navigation vers {{page}}',
+    'miam.action.executed': '{{action}}',
+    'miam.tts.enable': 'Activer la voix',
+    'miam.tts.disable': 'Desactiver la voix',
+    'miam.wakeWord.enable': 'Activer "Hey Miam"',
+    'miam.wakeWord.disable': 'Desactiver "Hey Miam"',
+    'miam.voice.listening': 'Ecoute en cours...',
+    'miam.suggest.scan': 'Scanner un ticket',
+    'miam.suggest.expiring': 'Qu\'est-ce qui expire bientot ?',
+    'miam.suggest.addItem': 'Ajouter un article',
+    'miam.suggest.whatToCook': 'Qu\'est-ce qu\'on mange ce soir ?',
+    'miam.suggest.sendMessage': 'Envoyer un message au foyer',
   },
 
   en: {
@@ -383,6 +404,27 @@ export const translations = {
 
     // Common
     'common.loading': 'Loading...',
+
+    // Miam Orchestrator
+    'miam.fab.tooltip': 'Talk to Miam',
+    'miam.sheet.title': 'Miam',
+    'miam.sheet.placeholder': 'Ask Miam something...',
+    'miam.sheet.clear': 'Clear conversation',
+    'miam.thinking': 'Miam is thinking...',
+    'miam.error': 'Sorry, I couldn\'t respond. Please try again.',
+    'miam.welcome': 'Hi! I\'m Miam, your culinary assistant. How can I help you?',
+    'miam.action.navigated': 'Navigated to {{page}}',
+    'miam.action.executed': '{{action}}',
+    'miam.tts.enable': 'Enable voice',
+    'miam.tts.disable': 'Disable voice',
+    'miam.wakeWord.enable': 'Enable "Hey Miam"',
+    'miam.wakeWord.disable': 'Disable "Hey Miam"',
+    'miam.voice.listening': 'Listening...',
+    'miam.suggest.scan': 'Scan a receipt',
+    'miam.suggest.expiring': 'What\'s expiring soon?',
+    'miam.suggest.addItem': 'Add an item',
+    'miam.suggest.whatToCook': 'What should we eat tonight?',
+    'miam.suggest.sendMessage': 'Send a message to the household',
   },
 
   zh: {
@@ -576,5 +618,26 @@ export const translations = {
 
     // Common
     'common.loading': '\u52a0\u8f7d\u4e2d...',
+
+    // Miam Orchestrator
+    'miam.fab.tooltip': '\u548cMiam\u804a\u5929',
+    'miam.sheet.title': 'Miam',
+    'miam.sheet.placeholder': '\u95eeMiam\u4efb\u4f55\u95ee\u9898...',
+    'miam.sheet.clear': '\u6e05\u9664\u5bf9\u8bdd',
+    'miam.thinking': 'Miam\u601d\u8003\u4e2d...',
+    'miam.error': '\u62b1\u6b49\uff0c\u65e0\u6cd5\u56de\u590d\u3002\u8bf7\u91cd\u8bd5\u3002',
+    'miam.welcome': '\u4f60\u597d\uff01\u6211\u662fMiam\uff0c\u4f60\u7684\u70f9\u996a\u52a9\u624b\u3002\u6211\u80fd\u5e2e\u4f60\u4ec0\u4e48\uff1f',
+    'miam.action.navigated': '\u5df2\u5bfc\u822a\u5230{{page}}',
+    'miam.action.executed': '{{action}}',
+    'miam.tts.enable': '\u542f\u7528\u8bed\u97f3',
+    'miam.tts.disable': '\u7981\u7528\u8bed\u97f3',
+    'miam.wakeWord.enable': '\u542f\u7528"Hey Miam"',
+    'miam.wakeWord.disable': '\u7981\u7528"Hey Miam"',
+    'miam.voice.listening': '\u6b63\u5728\u542c...',
+    'miam.suggest.scan': '\u626b\u63cf\u5c0f\u7968',
+    'miam.suggest.expiring': '\u4ec0\u4e48\u5feb\u8fc7\u671f\u4e86\uff1f',
+    'miam.suggest.addItem': '\u6dfb\u52a0\u7269\u54c1',
+    'miam.suggest.whatToCook': '\u4eca\u665a\u5403\u4ec0\u4e48\uff1f',
+    'miam.suggest.sendMessage': '\u7ed9\u5bb6\u5ead\u53d1\u6d88\u606f',
   },
 }
