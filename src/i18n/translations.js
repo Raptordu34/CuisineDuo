@@ -30,6 +30,15 @@ export const translations = {
     'chat.gifNoSuggestions': 'Aucune suggestion pour le moment',
     'chat.gifNoHistory': 'Pas encore de GIF envoye',
     'chat.gifClearSearch': "Effacer l'historique",
+    'chat.reply': 'Répondre',
+    'chat.delete': 'Supprimer',
+    'chat.copy': 'Copier',
+    'chat.edit': 'Modifier',
+    'chat.messageDeleted': 'Message supprimé',
+    'chat.replyingTo': 'Répondre à {{name}}',
+    'chat.editingMessage': 'Modification du message',
+    'chat.messageEdited': '(modifié)',
+    'chat.copied': 'Copié !',
 
     // Login
     'login.whoIsIt': 'Qui est-ce ?',
@@ -214,6 +223,15 @@ export const translations = {
     'chat.gifNoSuggestions': 'No suggestions at the moment',
     'chat.gifNoHistory': 'No GIFs sent yet',
     'chat.gifClearSearch': 'Clear history',
+    'chat.reply': 'Reply',
+    'chat.delete': 'Delete',
+    'chat.copy': 'Copy',
+    'chat.edit': 'Edit',
+    'chat.messageDeleted': 'Message deleted',
+    'chat.replyingTo': 'Replying to {{name}}',
+    'chat.editingMessage': 'Editing message',
+    'chat.messageEdited': '(edited)',
+    'chat.copied': 'Copied!',
 
     // Login
     'login.whoIsIt': 'Who is this?',
@@ -398,6 +416,15 @@ export const translations = {
     'chat.gifNoSuggestions': '\u6682\u65e0\u63a8\u8350',
     'chat.gifNoHistory': '\u8fd8\u6ca1\u6709\u53d1\u9001\u8fc7GIF',
     'chat.gifClearSearch': '\u6e05\u9664\u5386\u53f2',
+    'chat.reply': '\u56de\u590d',
+    'chat.delete': '\u5220\u9664',
+    'chat.copy': '\u590d\u5236',
+    'chat.edit': '\u4fee\u6539',
+    'chat.messageDeleted': '\u6d88\u606f\u5df2\u5220\u9664',
+    'chat.replyingTo': '\u56de\u590d {{name}}',
+    'chat.editingMessage': '\u7f16\u8f91\u6d88\u606f',
+    'chat.messageEdited': '(\u5df2\u7f16\u8f91)',
+    'chat.copied': '\u5df2\u590d\u5236\uff01',
 
     // Login
     'login.whoIsIt': '\u4f60\u662f\u8c01\uff1f',

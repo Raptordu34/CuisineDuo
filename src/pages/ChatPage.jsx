@@ -5,7 +5,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import DictationButton from '../components/DictationButton'
 import DictationTrace from '../components/DictationTrace'
 import GifPicker from '../components/chat/GifPicker'
-import ReactionBar from '../components/chat/ReactionBar'
+import MessageContextMenu from '../components/chat/MessageContextMenu'
 import ReactionBadges from '../components/chat/ReactionBadges'
 import EmojiPicker from '../components/chat/EmojiPicker'
 import { useUnreadMessages } from '../contexts/UnreadMessagesContext'
@@ -23,8 +23,10 @@ export default function ChatPage() {
   const [dictationCorrecting, setDictationCorrecting] = useState(false)
   const [dictationTrace, setDictationTrace] = useState(null)
   const [showGifPicker, setShowGifPicker] = useState(false)
-  const [reactionTarget, setReactionTarget] = useState(null)
+  const [actionTarget, setActionTarget] = useState(null)
   const [emojiPickerTarget, setEmojiPickerTarget] = useState(null)
+  const [replyTo, setReplyTo] = useState(null)
+  const [editingMessage, setEditingMessage] = useState(null)
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
   const unreadSeparatorRef = useRef(null)
@@ -132,6 +134,24 @@ export default function ChatPage() {
           }
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `household_id=eq.${profile.household_id}`,
+        },
+        (payload) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === payload.new.id
+                ? { ...m, content: payload.new.content, deleted_at: payload.new.deleted_at, edited_at: payload.new.edited_at }
+                : m
+            )
+          )
+        }
+      )
       .subscribe((status, err) => {
         if (status === 'SUBSCRIBED') {
           realtimeActive = true
@@ -189,7 +209,7 @@ export default function ChatPage() {
     const threshold = 100
     isNearBottom.current =
       container.scrollHeight - container.scrollTop - container.clientHeight < threshold
-    setReactionTarget(null)
+    setActionTarget(null)
   }, [])
 
   useEffect(() => {
@@ -238,10 +258,33 @@ export default function ChatPage() {
     setNewMessage('')
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
 
+    // Mode edition : UPDATE au lieu d'INSERT
+    if (editingMessage) {
+      const editedAt = new Date().toISOString()
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === editingMessage.id ? { ...m, content, edited_at: editedAt } : m
+        )
+      )
+      await supabase
+        .from('messages')
+        .update({ content, edited_at: editedAt })
+        .eq('id', editingMessage.id)
+        .eq('profile_id', profile.id)
+      setEditingMessage(null)
+      setSending(false)
+      return
+    }
+
+    // Capturer le reply avant de le réinitialiser
+    const capturedReplyTo = replyTo
+    setReplyTo(null)
+
     await supabase.from('messages').insert({
       household_id: profile.household_id,
       profile_id: profile.id,
       content,
+      reply_to_id: capturedReplyTo?.id || null,
     })
 
     // Marquer comme lu apres envoi (on est forcement en bas)
@@ -390,11 +433,71 @@ export default function ChatPage() {
   const handleMessageLongPress = useCallback((e) => {
     const messageId = e.currentTarget?.dataset?.messageId
     if (messageId) {
-      setReactionTarget({ messageId, x: e.clientX, y: e.clientY })
+      const msg = messages.find((m) => m.id === messageId)
+      setActionTarget({
+        messageId,
+        x: e.clientX,
+        y: e.clientY,
+        isMine: msg?.profile_id === profile?.id,
+        isGif: msg?.message_type === 'gif',
+        isAI: msg?.is_ai || false,
+        content: msg?.content || '',
+        isDeleted: !!msg?.deleted_at,
+      })
     }
-  }, [])
+  }, [messages, profile?.id])
 
   const longPressHandlers = useLongPress(handleMessageLongPress)
+
+  const handleDelete = useCallback(async (messageId) => {
+    setActionTarget(null)
+    const deletedAt = new Date().toISOString()
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, deleted_at: deletedAt } : m))
+    )
+    await supabase
+      .from('messages')
+      .update({ deleted_at: deletedAt })
+      .eq('id', messageId)
+      .eq('profile_id', profile.id)
+  }, [profile?.id])
+
+  const handleEdit = useCallback((messageId) => {
+    setActionTarget(null)
+    const msg = messages.find((m) => m.id === messageId)
+    if (!msg) return
+    setReplyTo(null)
+    setEditingMessage({ id: messageId, originalContent: msg.content })
+    setNewMessage(msg.content)
+    setTimeout(() => {
+      textareaRef.current?.focus()
+      // Placer le curseur en fin de texte
+      const el = textareaRef.current
+      if (el) { el.selectionStart = el.selectionEnd = el.value.length }
+    }, 50)
+  }, [messages])
+
+  const handleCopy = useCallback((messageId) => {
+    setActionTarget(null)
+    const msg = messages.find((m) => m.id === messageId)
+    if (msg?.content) {
+      navigator.clipboard.writeText(msg.content).catch(() => {})
+    }
+  }, [messages])
+
+  const handleReply = useCallback((messageId) => {
+    setActionTarget(null)
+    const msg = messages.find((m) => m.id === messageId)
+    if (!msg) return
+    setEditingMessage(null)
+    setReplyTo({
+      id: messageId,
+      content: msg.content,
+      authorName: msg.is_ai ? 'Miam' : (msg.profiles?.display_name || '?'),
+      isGif: msg.message_type === 'gif',
+    })
+    textareaRef.current?.focus()
+  }, [messages])
 
   const renderMarkdown = (text) => {
     const lines = text.split('\n')
@@ -544,7 +647,24 @@ export default function ChatPage() {
                       {...longPressHandlers}
                       className="px-3 py-2 rounded-2xl text-sm leading-relaxed bg-indigo-50 text-indigo-900 rounded-bl-md shadow-sm select-none"
                     >
-                      {renderMarkdown(msg.content)}
+                      {msg.reply_to_id && (() => {
+                        const replied = messages.find((m) => m.id === msg.reply_to_id)
+                        return (
+                          <div className="border-l-2 border-indigo-300 pl-2 mb-2 opacity-75">
+                            <span className="text-[10px] font-medium block text-indigo-600">
+                              {replied?.is_ai ? 'Miam' : (replied?.profiles?.display_name || '?')}
+                            </span>
+                            <p className="text-[10px] text-indigo-700 line-clamp-2">
+                              {replied?.deleted_at ? t('chat.messageDeleted') : (replied?.message_type === 'gif' ? '[GIF]' : replied?.content || '...')}
+                            </p>
+                          </div>
+                        )
+                      })()}
+                      {msg.deleted_at ? (
+                        <span className="text-xs italic opacity-50">{t('chat.messageDeleted')}</span>
+                      ) : (
+                        renderMarkdown(msg.content)
+                      )}
                     </div>
                     {reactionsByMessageId[msg.id] && Object.keys(reactionsByMessageId[msg.id]).length > 0 && (
                       <ReactionBadges
@@ -586,7 +706,22 @@ export default function ChatPage() {
                             : 'bg-white text-gray-800 rounded-bl-md shadow-sm'
                         }`}
                       >
-                        {msg.message_type === 'gif' && msg.media_url ? (
+                        {msg.reply_to_id && (() => {
+                          const replied = messages.find((m) => m.id === msg.reply_to_id)
+                          return (
+                            <div className={`border-l-2 pl-2 mb-2 opacity-80 ${mine ? 'border-white/50' : 'border-gray-300'}`}>
+                              <span className={`text-[10px] font-medium block ${mine ? 'text-orange-100' : 'text-gray-500'}`}>
+                                {replied?.is_ai ? 'Miam' : (replied?.profiles?.display_name || '?')}
+                              </span>
+                              <p className={`text-[10px] line-clamp-2 ${mine ? 'text-orange-100' : 'text-gray-400'}`}>
+                                {replied?.deleted_at ? t('chat.messageDeleted') : (replied?.message_type === 'gif' ? '[GIF]' : replied?.content || '...')}
+                              </p>
+                            </div>
+                          )
+                        })()}
+                        {msg.deleted_at ? (
+                          <span className="text-xs italic opacity-60">{t('chat.messageDeleted')}</span>
+                        ) : msg.message_type === 'gif' && msg.media_url ? (
                           <img
                             src={msg.media_url}
                             alt="GIF"
@@ -609,6 +744,9 @@ export default function ChatPage() {
                         <span className="text-[10px] text-gray-400">
                           {formatTime(msg.created_at)}
                         </span>
+                        {msg.edited_at && !msg.deleted_at && (
+                          <span className="text-[9px] text-gray-400 italic">{t('chat.messageEdited')}</span>
+                        )}
                         {mine && readAvatarsByMessageId[msg.id] && (
                           <div className="flex -space-x-1">
                             {readAvatarsByMessageId[msg.id].map((reader) => (
@@ -650,19 +788,27 @@ export default function ChatPage() {
         <div ref={bottomRef} />
       </div>
 
-      {reactionTarget && (
-        <ReactionBar
-          messageId={reactionTarget.messageId}
-          position={{ x: reactionTarget.x, y: reactionTarget.y }}
+      {actionTarget && (
+        <MessageContextMenu
+          messageId={actionTarget.messageId}
+          position={{ x: actionTarget.x, y: actionTarget.y }}
+          isMine={actionTarget.isMine}
+          isGif={actionTarget.isGif}
+          isAI={actionTarget.isAI}
+          isDeleted={actionTarget.isDeleted}
           onSelectEmoji={(msgId, emoji) => {
             toggleReaction(msgId, emoji)
-            setReactionTarget(null)
+            setActionTarget(null)
           }}
           onOpenFullPicker={(msgId) => {
-            setReactionTarget(null)
+            setActionTarget(null)
             setEmojiPickerTarget(msgId)
           }}
-          onClose={() => setReactionTarget(null)}
+          onReply={handleReply}
+          onDelete={handleDelete}
+          onCopy={handleCopy}
+          onEdit={handleEdit}
+          onClose={() => setActionTarget(null)}
         />
       )}
 
@@ -693,6 +839,41 @@ export default function ChatPage() {
       )}
 
       <form onSubmit={handleSend} className={`shrink-0 border-t bg-white transition-colors ${miamMode ? 'border-indigo-200' : 'border-gray-200'}`}>
+        {/* Prévisualisation reply ou mode édition */}
+        {(replyTo || editingMessage) && (
+          <div className="flex items-start gap-2 px-3 pt-2 pb-1">
+            <div className={`flex-1 min-w-0 border-l-2 pl-2 ${editingMessage ? 'border-amber-400' : 'border-orange-400'}`}>
+              <span className={`text-xs font-medium ${editingMessage ? 'text-amber-500' : 'text-orange-500'}`}>
+                {editingMessage
+                  ? t('chat.editingMessage')
+                  : t('chat.replyingTo', { name: replyTo.authorName })}
+              </span>
+              <p className="text-xs text-gray-400 truncate">
+                {editingMessage
+                  ? editingMessage.originalContent
+                  : replyTo.isGif
+                  ? '[GIF]'
+                  : replyTo.content}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (editingMessage) {
+                  setEditingMessage(null)
+                  setNewMessage('')
+                } else {
+                  setReplyTo(null)
+                }
+              }}
+              className="shrink-0 w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-600 mt-0.5 cursor-pointer"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+              </svg>
+            </button>
+          </div>
+        )}
         {/* Zone de texte avec bouton envoyer integre */}
         <div className="flex items-end gap-2 px-3 pt-2.5 pb-1.5 md:px-4">
           <div className={`flex-1 min-w-0 flex items-end border rounded-2xl transition-colors ${
