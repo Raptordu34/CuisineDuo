@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useMiamActions } from '../hooks/useMiamActions'
 import DictationButton from '../components/DictationButton'
 import DictationTrace from '../components/DictationTrace'
 import GifPicker from '../components/chat/GifPicker'
@@ -33,6 +34,21 @@ export default function ChatPage() {
   const scrollContainerRef = useRef(null)
   const initialScrollDone = useRef(false)
   const { markAsRead, lastReadAtRef, readStatuses, clearChatNotifications } = useUnreadMessages()
+
+  // Miam orchestrator: register available actions
+  useMiamActions({
+    sendChatMessage: {
+      handler: async ({ text }) => {
+        if (!profile?.household_id || !profile?.id || !text) return
+        await supabase.from('messages').insert({
+          household_id: profile.household_id,
+          profile_id: profile.id,
+          content: text,
+        })
+      },
+      description: 'Send a message in household chat',
+    },
+  })
 
   // Fermer les notifications push dès l'arrivée sur la page chat
   useEffect(() => {

@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useNotifications } from '../hooks/useNotifications'
+import { useMiamActions } from '../hooks/useMiamActions'
 
 export default function HomePage() {
   const { profile } = useAuth()
@@ -11,6 +12,9 @@ export default function HomePage() {
   const navigate = useNavigate()
   const { supported, permission, subscribed, subscribe } = useNotifications()
   const [stats, setStats] = useState({ inStock: 0, expenses: 0, expiringSoon: 0 })
+
+  // Miam orchestrator: no page-specific actions (navigate is built-in)
+  useMiamActions({})
 
   const showBanner = supported && permission !== 'denied' && !subscribed
 

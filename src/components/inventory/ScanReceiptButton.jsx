@@ -30,7 +30,7 @@ function compressImage(file, maxWidth = 800, quality = 0.6) {
   })
 }
 
-export default function ScanReceiptButton({ onScanComplete, onError, disabled }) {
+export default function ScanReceiptButton({ onScanComplete, onError, disabled, galleryTriggerRef }) {
   const { t, lang } = useLanguage()
   const cameraRef = useRef(null)
   const galleryRef = useRef(null)
@@ -50,6 +50,16 @@ export default function ScanReceiptButton({ onScanComplete, onError, disabled })
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [showDropdown])
+
+  // Expose gallery trigger to parent for programmatic access
+  useEffect(() => {
+    if (galleryTriggerRef) {
+      galleryTriggerRef.current = () => {
+        setSelectedMode('auto')
+        galleryRef.current?.click()
+      }
+    }
+  }, [galleryTriggerRef])
 
   const handleSelect = (mode, source) => {
     setSelectedMode(mode)

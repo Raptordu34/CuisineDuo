@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useMiamActions } from '../hooks/useMiamActions'
 import CategoryFilter from '../components/inventory/CategoryFilter'
 import InventoryList from '../components/inventory/InventoryList'
 import AddItemModal from '../components/inventory/AddItemModal'
@@ -47,6 +48,23 @@ export default function InventoryPage() {
   const [dictationCorrecting, setDictationCorrecting] = useState(false)
   const [dictationTrace, setDictationTrace] = useState(null)
   const [toastMessage, setToastMessage] = useState(null)
+  const scanTriggerRef = useRef(null)
+
+  // Miam orchestrator: register available actions
+  useMiamActions({
+    openAddItem: {
+      handler: () => setShowAddModal(true),
+      description: 'Open add item modal',
+    },
+    openScanner: {
+      handler: () => scanTriggerRef.current?.(),
+      description: 'Open receipt scanner',
+    },
+    filterCategory: {
+      handler: ({ category: cat }) => setCategory(cat === 'all' ? 'all' : cat),
+      description: 'Filter inventory by category',
+    },
+  })
 
   useEffect(() => {
     if (!profile?.household_id) return
@@ -382,7 +400,7 @@ export default function InventoryPage() {
               </svg>
               {t('inventory.add')}
             </button>
-            <ScanReceiptButton onScanComplete={handleScanComplete} onError={(msg) => { setToastMessage(msg); setTimeout(() => setToastMessage(null), 5000) }} />
+            <ScanReceiptButton onScanComplete={handleScanComplete} onError={(msg) => { setToastMessage(msg); setTimeout(() => setToastMessage(null), 5000) }} galleryTriggerRef={scanTriggerRef} />
           </div>
         )}
       </div>

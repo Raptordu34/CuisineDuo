@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { LanguageProvider } from './contexts/LanguageContext'
 import { AuthProvider } from './contexts/AuthContext'
 import { UnreadMessagesProvider } from './contexts/UnreadMessagesContext'
+import { MiamProvider } from './contexts/MiamContext'
 import Layout from './components/layout/Layout'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import LoginPage from './pages/LoginPage'
@@ -16,6 +17,7 @@ function App() {
       <LanguageProvider>
       <AuthProvider>
       <UnreadMessagesProvider>
+      <MiamProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
@@ -50,6 +52,7 @@ function App() {
             }
           />
         </Routes>
+      </MiamProvider>
       </UnreadMessagesProvider>
       </AuthProvider>
       </LanguageProvider>
