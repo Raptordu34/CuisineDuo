@@ -3,9 +3,9 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 const GIPHY_SEARCH_URL = 'https://api.giphy.com/v1/gifs/search'
 
 const SYSTEM_PROMPTS = {
-  fr: "Tu es un expert en GIFs et reactions visuelles. Genere des requetes de recherche courtes (1-3 mots en anglais) pour trouver des GIFs pertinents. Reponds uniquement avec les requetes, une par ligne, sans numerotation ni ponctuation.",
-  en: "You are a GIF and visual reaction expert. Generate short search queries (1-3 words in English) to find relevant GIFs. Respond only with the queries, one per line, no numbering or punctuation.",
-  zh: "你是GIF和视觉反应专家。生成简短的搜索查询（1-3个英文单词）来找到相关的GIF。只回复查询，每行一个，不要编号或标点。",
+  fr: "Tu es un expert en GIFs et reactions visuelles. Ton but est de generer des mots-cles de recherche (1-3 mots en anglais) qui capturent parfaitement l'emotion, le ton ou la reponse ideale au dernier message de la conversation. Sois créatif et varie les styles (humour, mignon, sarcastique, etc.) en fonction du contexte. Reponds uniquement avec les requetes, une par ligne, sans numerotation ni ponctuation.",
+  en: "You are a GIF and visual reaction expert. Your goal is to generate search keywords (1-3 words in English) that perfectly capture the emotion, tone, or ideal response to the last message in the conversation. Be creative and vary styles (humorous, cute, sarcastic, etc.) based on context. Respond only with queries, one per line, no numbering or punctuation.",
+  zh: "你是GIF和视觉反应专家。你的目标是生成搜索关键词（1-3个英文单词），完美捕捉对话中最后一条消息的情绪、语调或理想回应。根据语境发挥创意并变换风格（幽默、可爱、讽刺等）。只回复查询，每行一个，不要编号或标点。",
 }
 
 export default async function handler(req, res) {
@@ -16,7 +16,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const { messages, gifHistory, lang = 'fr' } = req.body
+  const { messages, gifHistory, recentGifs, lang = 'fr' } = req.body
 
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) return res.status(500).json({ error: 'API key not configured' })
@@ -26,11 +26,15 @@ export default async function handler(req, res) {
 
   try {
     // Construire le contexte conversation (ignorer les messages GIF)
-    const safeMessages = Array.isArray(messages) ? messages : []
-    const conversationContext = safeMessages
+    const safeMessages = (Array.isArray(messages) ? messages : [])
       .filter(m => m.content && m.content.trim())
-      .slice(0, 15)
-      .map(m => `${m.is_ai ? 'AI' : 'User'}: ${m.content}`)
+
+    const conversationContext = safeMessages
+      .map((m, i) => {
+        const isLast = i === safeMessages.length - 1
+        const prefix = isLast ? '>>> DERNIER MESSAGE (PRIORITÉ)' : (m.is_ai ? 'AI' : 'User')
+        return `${prefix}: ${m.content}`
+      })
       .join('\n')
 
     // Construire les preferences GIF de l'utilisateur
@@ -39,13 +43,23 @@ export default async function handler(req, res) {
       .map(g => `"${g.title}" (${g.count}x)`)
       .join(', ')
 
-    const prompt = `Conversation recente du chat:
+    const safeRecentGifs = Array.isArray(recentGifs) ? recentGifs : []
+    const recentContext = safeRecentGifs.length > 0 ? `GIFs recents de l'utilisateur: ${safeRecentGifs.join(', ')}` : ''
+
+    const prompt = `CONTEXTE DE LA CONVERSATION:
 ${conversationContext || '(pas de conversation recente)'}
 
-GIFs preferes de l'utilisateur: ${gifPreferences || 'Aucun historique'}
+${recentContext}
+GIFs les plus utilisés par l'utilisateur: ${gifPreferences || 'Aucun historique'}
 
-En te basant sur le ton et le sujet de la conversation, et sur les preferences GIF de l'utilisateur (style, personnages, themes recurrents), genere 4 requetes de recherche GIF courtes et pertinentes.
-Si l'utilisateur a des personnages ou styles preferes (ex: grenouille, chat, anime), incorpore-les dans les requetes en les adaptant au contexte de la conversation.`
+INSTRUCTIONS:
+1. Analyse le DERNIER MESSAGE pour comprendre l'emotion immédiate et le besoin de réaction.
+2. Regarde les GIFs récents et les plus utilisés pour comprendre le style visuel de l'utilisateur (humour, anime, animaux, minimaliste, etc.).
+3. Génère 5 requêtes de recherche Giphy (en ANGLAIS obligatoire) très courtes :
+   - 2 requêtes pour réagir directement au dernier message.
+   - 1 requête pour l'ambiance globale de la discussion.
+   - 1 requête basée sur le style habituel de l'utilisateur adapté au contexte actuel.
+   - 1 requête créative ou inattendue mais pertinente.`
 
     // Appel Gemini pour generer les requetes
     const genAI = new GoogleGenerativeAI(apiKey)

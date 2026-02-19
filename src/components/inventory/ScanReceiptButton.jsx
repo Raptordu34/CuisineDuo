@@ -1,5 +1,7 @@
 import { useRef, useState, useEffect } from 'react'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useAuth } from '../../contexts/AuthContext'
+import { logAI } from '../../lib/aiLogger'
 
 function compressImage(file, maxWidth = 800, quality = 0.6) {
   return new Promise((resolve, reject) => {
@@ -30,8 +32,9 @@ function compressImage(file, maxWidth = 800, quality = 0.6) {
   })
 }
 
-export default function ScanReceiptButton({ onScanComplete, onError, disabled, galleryTriggerRef }) {
+export default function ScanReceiptButton({ onScanComplete, onError, disabled, scanTriggerRef }) {
   const { t, lang } = useLanguage()
+  const { profile } = useAuth()
   const cameraRef = useRef(null)
   const galleryRef = useRef(null)
   const dropdownRef = useRef(null)
@@ -51,15 +54,19 @@ export default function ScanReceiptButton({ onScanComplete, onError, disabled, g
     return () => document.removeEventListener('mousedown', handleClick)
   }, [showDropdown])
 
-  // Expose gallery trigger to parent for programmatic access
+  // Expose scan trigger to parent for programmatic access (camera by default)
   useEffect(() => {
-    if (galleryTriggerRef) {
-      galleryTriggerRef.current = () => {
-        setSelectedMode('auto')
-        galleryRef.current?.click()
+    if (scanTriggerRef) {
+      scanTriggerRef.current = ({ source = 'camera', mode = 'auto' } = {}) => {
+        setSelectedMode(mode)
+        if (source === 'gallery') {
+          galleryRef.current?.click()
+        } else {
+          cameraRef.current?.click()
+        }
       }
     }
-  }, [galleryTriggerRef])
+  }, [scanTriggerRef])
 
   const handleSelect = (mode, source) => {
     setSelectedMode(mode)
@@ -76,13 +83,15 @@ export default function ScanReceiptButton({ onScanComplete, onError, disabled, g
     if (!file) return
 
     setScanning(true)
+    const t0 = Date.now()
+    const mode = selectedMode || 'auto'
     try {
       const { base64, mimeType } = await compressImage(file)
 
       const res = await fetch('/api/scan-receipt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: base64, mimeType, lang, mode: selectedMode || 'auto' }),
+        body: JSON.stringify({ image: base64, mimeType, lang, mode }),
       })
 
       if (!res.ok) {
@@ -92,11 +101,36 @@ export default function ScanReceiptButton({ onScanComplete, onError, disabled, g
 
       const data = await res.json()
       if (data.items && data.items.length > 0) {
+        logAI({
+          householdId: profile?.household_id,
+          profileId: profile?.id,
+          endpoint: 'scan-receipt',
+          input: { lang, mode, fileSizeKb: Math.round(file.size / 1024) },
+          output: { itemCount: data.items.length, receiptTotal: data.receipt_total ?? null },
+          durationMs: Date.now() - t0,
+        })
         onScanComplete(data.items, data.receipt_total ?? null)
       } else {
+        logAI({
+          householdId: profile?.household_id,
+          profileId: profile?.id,
+          endpoint: 'scan-receipt',
+          input: { lang, mode, fileSizeKb: Math.round(file.size / 1024) },
+          output: { itemCount: 0 },
+          durationMs: Date.now() - t0,
+          error: 'No items detected',
+        })
         onError?.(t('inventory.scanNoItems'))
       }
     } catch (err) {
+      logAI({
+        householdId: profile?.household_id,
+        profileId: profile?.id,
+        endpoint: 'scan-receipt',
+        input: { lang, mode },
+        durationMs: Date.now() - t0,
+        error: err?.message || 'Unknown error',
+      })
       onError?.(`${t('inventory.scanError')}: ${err.message}`)
     } finally {
       setScanning(false)

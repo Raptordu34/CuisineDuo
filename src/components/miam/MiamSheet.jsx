@@ -33,6 +33,12 @@ function ActionChip({ action, t }) {
     openScanner: t('miam.action.executed', { action: 'Scanner' }),
     filterCategory: t('miam.action.executed', { action: 'Filtrer' }),
     sendChatMessage: t('miam.action.executed', { action: 'Message envoyé' }),
+    editLastChatMessage: t('miam.action.executed', { action: 'Message modifié' }),
+    deleteLastChatMessage: t('miam.action.executed', { action: 'Message supprimé' }),
+    addInventoryItem: t('miam.action.executed', { action: `Ajouté : ${action.args?.name || ''}` }),
+    updateInventoryItem: t('miam.action.executed', { action: `Mis à jour : ${action.args?.name || ''}` }),
+    consumeInventoryItem:  t('miam.action.executed', { action: `Consommé : ${action.args?.name || ''}` }),
+    deleteInventoryItem:   t('miam.action.executed', { action: `Supprimé : ${action.args?.name || ''}` }),
   }
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 text-xs">

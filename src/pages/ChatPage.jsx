@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useMiamActions } from '../hooks/useMiamActions'
+import { useMiam } from '../contexts/MiamContext'
 import DictationButton from '../components/DictationButton'
 import DictationTrace from '../components/DictationTrace'
 import GifPicker from '../components/chat/GifPicker'
@@ -12,15 +13,15 @@ import EmojiPicker from '../components/chat/EmojiPicker'
 import { useUnreadMessages } from '../contexts/UnreadMessagesContext'
 import { useMessageReactions } from '../hooks/useMessageReactions'
 import { useLongPress } from '../hooks/useLongPress'
+import { logAI } from '../lib/aiLogger'
 
 export default function ChatPage() {
   const { profile } = useAuth()
   const { t, lang } = useLanguage()
+  const { householdMembers } = useMiam()
   const [messages, setMessages] = useState([])
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
-  const [aiLoading, setAiLoading] = useState(false)
-  const [miamMode, setMiamMode] = useState(false)
   const [dictationCorrecting, setDictationCorrecting] = useState(false)
   const [dictationTrace, setDictationTrace] = useState(null)
   const [showGifPicker, setShowGifPicker] = useState(false)
@@ -40,11 +41,17 @@ export default function ChatPage() {
     sendChatMessage: {
       handler: async ({ text }) => {
         if (!profile?.household_id || !profile?.id || !text) return
-        await supabase.from('messages').insert({
-          household_id: profile.household_id,
-          profile_id: profile.id,
-          content: text,
-        })
+        const { data, error } = await supabase
+          .from('messages')
+          .insert({
+            household_id: profile.household_id,
+            profile_id: profile.id,
+            content: text,
+          })
+          .select('id')
+          .single()
+        // Retourner l'ID pour que MiamContext puisse tracker le message (edit/delete)
+        if (!error && data?.id) return { id: data.id }
       },
       description: 'Send a message in household chat',
     },
@@ -233,7 +240,7 @@ export default function ChatPage() {
     if (isNearBottom.current) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [messages, aiLoading])
+  }, [messages])
 
   // IntersectionObserver : marquer comme lu quand le bas est visible
   useEffect(() => {
@@ -319,56 +326,6 @@ export default function ChatPage() {
     }).catch(() => {})
 
     setSending(false)
-
-    // Detect @Miam mention or Miam mode toggle
-    if (miamMode || /@miam/i.test(content)) {
-      setAiLoading(true)
-      try {
-        const historyForAI = messages.slice(-20).map(msg => ({
-          content: msg.content,
-          is_ai: msg.is_ai || false,
-        }))
-
-        const res = await fetch('/api/chat-ai', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: content, history: historyForAI, lang }),
-        })
-
-        if (!res.ok) throw new Error('AI request failed')
-
-        const data = await res.json()
-        const aiResponse = data.response
-
-        await supabase.from('messages').insert({
-          household_id: profile.household_id,
-          profile_id: profile.id,
-          content: aiResponse,
-          is_ai: true,
-        })
-
-        // Fire-and-forget push notification for AI response
-        fetch('/api/send-notification', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            household_id: profile.household_id,
-            sender_profile_id: profile.id,
-            title: 'Miam',
-            body: aiResponse.length > 100 ? aiResponse.slice(0, 100) + '...' : aiResponse,
-          }),
-        }).catch(() => {})
-      } catch {
-        await supabase.from('messages').insert({
-          household_id: profile.household_id,
-          profile_id: profile.id,
-          content: t('chat.aiError'),
-          is_ai: true,
-        })
-      } finally {
-        setAiLoading(false)
-      }
-    }
   }
 
   const handleGifSelect = async (gif) => {
@@ -412,6 +369,7 @@ export default function ChatPage() {
   const handleDictationResult = useCallback(async (text, dictLang) => {
     if (!text.trim()) return
     setDictationCorrecting(true)
+    const t0 = Date.now()
     try {
       const chatHistory = messages.slice(-20).map(msg => ({
         author: msg.is_ai ? 'Miam (AI assistant)' : (msg.profiles?.display_name || 'User'),
@@ -420,7 +378,7 @@ export default function ChatPage() {
       const res = await fetch('/api/correct-transcription', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, context: 'chat', lang: dictLang || lang, chatHistory }),
+        body: JSON.stringify({ text, context: 'chat', lang: dictLang || lang, chatHistory, householdMembers }),
       })
       if (res.ok) {
         const data = await res.json()
@@ -430,15 +388,39 @@ export default function ChatPage() {
           correctedResult: data.corrected,
           timestamp: Date.now(),
         })
+        logAI({
+          householdId: profile?.household_id,
+          profileId: profile?.id,
+          endpoint: 'correct-transcription',
+          input: { text, context: 'chat', lang: dictLang || lang },
+          output: { corrected: data.corrected },
+          durationMs: Date.now() - t0,
+        })
       } else {
         setNewMessage((prev) => prev ? prev + ' ' + text : text)
+        logAI({
+          householdId: profile?.household_id,
+          profileId: profile?.id,
+          endpoint: 'correct-transcription',
+          input: { text, context: 'chat', lang: dictLang || lang },
+          durationMs: Date.now() - t0,
+          error: `HTTP ${res.status}`,
+        })
       }
-    } catch {
+    } catch (err) {
       setNewMessage((prev) => prev ? prev + ' ' + text : text)
+      logAI({
+        householdId: profile?.household_id,
+        profileId: profile?.id,
+        endpoint: 'correct-transcription',
+        input: { text, context: 'chat', lang: dictLang || lang },
+        durationMs: Date.now() - t0,
+        error: err?.message || 'Unknown error',
+      })
     } finally {
       setDictationCorrecting(false)
     }
-  }, [lang, messages])
+  }, [lang, messages, householdMembers, profile])
 
   const isMine = (msg) => msg.profile_id === profile.id
 
@@ -785,22 +767,6 @@ export default function ChatPage() {
           )
         })}
 
-        {aiLoading && (
-          <div className="flex items-end gap-2">
-            <div className="w-7 h-7 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xs shrink-0">
-              🤖
-            </div>
-            <div className="px-3 py-2 rounded-2xl text-sm bg-indigo-50 text-indigo-500 rounded-bl-md shadow-sm">
-              <span className="inline-flex items-center gap-1">
-                {t('chat.aiThinking')}
-                <span className="animate-bounce [animation-delay:0ms]">.</span>
-                <span className="animate-bounce [animation-delay:150ms]">.</span>
-                <span className="animate-bounce [animation-delay:300ms]">.</span>
-              </span>
-            </div>
-          </div>
-        )}
-
         <div ref={bottomRef} />
       </div>
 
@@ -854,7 +820,7 @@ export default function ChatPage() {
         />
       )}
 
-      <form onSubmit={handleSend} className={`shrink-0 border-t bg-white transition-colors ${miamMode ? 'border-indigo-200' : 'border-gray-200'}`}>
+      <form onSubmit={handleSend} className="shrink-0 border-t border-gray-200 bg-white">
         {/* Prévisualisation reply ou mode édition */}
         {(replyTo || editingMessage) && (
           <div className="flex items-start gap-2 px-3 pt-2 pb-1">
@@ -892,11 +858,7 @@ export default function ChatPage() {
         )}
         {/* Zone de texte avec bouton envoyer integre */}
         <div className="flex items-end gap-2 px-3 pt-2.5 pb-1.5 md:px-4">
-          <div className={`flex-1 min-w-0 flex items-end border rounded-2xl transition-colors ${
-            miamMode
-              ? 'border-indigo-300 bg-indigo-50/50 focus-within:ring-2 focus-within:ring-indigo-400 focus-within:border-transparent'
-              : 'border-gray-300 focus-within:ring-2 focus-within:ring-orange-400 focus-within:border-transparent'
-          }`}>
+          <div className="flex-1 min-w-0 flex items-end border rounded-2xl transition-colors border-gray-300 focus-within:ring-2 focus-within:ring-orange-400 focus-within:border-transparent">
             <textarea
               ref={textareaRef}
               rows={1}
@@ -908,18 +870,14 @@ export default function ChatPage() {
                   handleSend(e)
                 }
               }}
-              placeholder={miamMode ? t('chat.aiPlaceholder') : t('chat.placeholder')}
+              placeholder={t('chat.placeholder')}
               className="flex-1 min-w-0 bg-transparent px-4 py-2.5 text-sm focus:outline-none resize-none leading-normal"
               style={{ maxHeight: '120px', overflowY: 'auto' }}
             />
             <button
               type="submit"
               disabled={!newMessage.trim() || sending || dictationCorrecting}
-              className={`shrink-0 w-8 h-8 m-1 rounded-full flex items-center justify-center text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer ${
-                miamMode
-                  ? 'bg-indigo-500 hover:bg-indigo-600'
-                  : 'bg-orange-500 hover:bg-orange-600'
-              }`}
+              className="shrink-0 w-8 h-8 m-1 rounded-full flex items-center justify-center text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer bg-orange-500 hover:bg-orange-600"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
                 <path d="M3.105 2.288a.75.75 0 0 0-.826.95l1.414 4.926A1.5 1.5 0 0 0 5.135 9.25h6.115a.75.75 0 0 1 0 1.5H5.135a1.5 1.5 0 0 0-1.442 1.086l-1.414 4.926a.75.75 0 0 0 .826.95l14.095-5.637a.75.75 0 0 0 0-1.4L3.105 2.288Z" />
@@ -930,20 +888,6 @@ export default function ChatPage() {
 
         {/* Barre d'actions */}
         <div className="flex items-center gap-1 px-3 pb-2.5 md:px-4">
-          {/* Bouton Miam */}
-          <button
-            type="button"
-            onClick={() => setMiamMode(!miamMode)}
-            className={`shrink-0 h-8 px-2.5 rounded-full flex items-center justify-center gap-1 text-xs font-medium transition-all cursor-pointer ${
-              miamMode
-                ? 'bg-indigo-500 text-white shadow-sm'
-                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-            }`}
-          >
-            <span className="text-sm">🤖</span>
-            <span className="hidden sm:inline">Miam</span>
-          </button>
-
           {/* Bouton GIF */}
           <button
             type="button"
@@ -961,7 +905,7 @@ export default function ChatPage() {
           <DictationButton
             onResult={handleDictationResult}
             disabled={sending || dictationCorrecting}
-            color={miamMode ? 'indigo' : 'orange'}
+            color="orange"
             popoverDirection="up"
           />
           {dictationCorrecting && (
