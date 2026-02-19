@@ -5,7 +5,12 @@ import { useLanguage } from '../contexts/LanguageContext'
 import DictationButton from '../components/DictationButton'
 import DictationTrace from '../components/DictationTrace'
 import GifPicker from '../components/chat/GifPicker'
+import ReactionBar from '../components/chat/ReactionBar'
+import ReactionBadges from '../components/chat/ReactionBadges'
+import EmojiPicker from '../components/chat/EmojiPicker'
 import { useUnreadMessages } from '../contexts/UnreadMessagesContext'
+import { useMessageReactions } from '../hooks/useMessageReactions'
+import { useLongPress } from '../hooks/useLongPress'
 
 export default function ChatPage() {
   const { profile } = useAuth()
@@ -18,6 +23,8 @@ export default function ChatPage() {
   const [dictationCorrecting, setDictationCorrecting] = useState(false)
   const [dictationTrace, setDictationTrace] = useState(null)
   const [showGifPicker, setShowGifPicker] = useState(false)
+  const [reactionTarget, setReactionTarget] = useState(null)
+  const [emojiPickerTarget, setEmojiPickerTarget] = useState(null)
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
   const unreadSeparatorRef = useRef(null)
@@ -182,6 +189,7 @@ export default function ChatPage() {
     const threshold = 100
     isNearBottom.current =
       container.scrollHeight - container.scrollTop - container.clientHeight < threshold
+    setReactionTarget(null)
   }, [])
 
   useEffect(() => {
@@ -375,6 +383,19 @@ export default function ChatPage() {
 
   const isMine = (msg) => msg.profile_id === profile.id
 
+  // Reactions
+  const messageIds = useMemo(() => messages.map((m) => m.id), [messages])
+  const { reactionsByMessageId, toggleReaction } = useMessageReactions(profile, messageIds)
+
+  const handleMessageLongPress = useCallback((e) => {
+    const messageId = e.currentTarget?.dataset?.messageId
+    if (messageId) {
+      setReactionTarget({ messageId, x: e.clientX, y: e.clientY })
+    }
+  }, [])
+
+  const longPressHandlers = useLongPress(handleMessageLongPress)
+
   const renderMarkdown = (text) => {
     const lines = text.split('\n')
     const elements = []
@@ -518,9 +539,20 @@ export default function ChatPage() {
                   </div>
                   <div className="max-w-[75%] flex flex-col items-start">
                     <span className="text-xs text-indigo-500 mb-0.5 ml-1 font-medium">Miam</span>
-                    <div className="px-3 py-2 rounded-2xl text-sm leading-relaxed bg-indigo-50 text-indigo-900 rounded-bl-md shadow-sm">
+                    <div
+                      data-message-id={msg.id}
+                      {...longPressHandlers}
+                      className="px-3 py-2 rounded-2xl text-sm leading-relaxed bg-indigo-50 text-indigo-900 rounded-bl-md shadow-sm select-none"
+                    >
                       {renderMarkdown(msg.content)}
                     </div>
+                    {reactionsByMessageId[msg.id] && Object.keys(reactionsByMessageId[msg.id]).length > 0 && (
+                      <ReactionBadges
+                        reactions={reactionsByMessageId[msg.id]}
+                        onTapReaction={(emoji) => toggleReaction(msg.id, emoji)}
+                        isMine={false}
+                      />
+                    )}
                     <span className="text-[10px] text-gray-400 mt-0.5 ml-1">
                       {formatTime(msg.created_at)}
                     </span>
@@ -542,7 +574,9 @@ export default function ChatPage() {
                         </span>
                       )}
                       <div
-                        className={`rounded-2xl text-sm leading-relaxed ${
+                        data-message-id={msg.id}
+                        {...longPressHandlers}
+                        className={`rounded-2xl text-sm leading-relaxed select-none ${
                           msg.message_type === 'gif'
                             ? 'p-1 overflow-hidden'
                             : 'px-3 py-2'
@@ -564,6 +598,13 @@ export default function ChatPage() {
                           msg.content
                         )}
                       </div>
+                      {reactionsByMessageId[msg.id] && Object.keys(reactionsByMessageId[msg.id]).length > 0 && (
+                        <ReactionBadges
+                          reactions={reactionsByMessageId[msg.id]}
+                          onTapReaction={(emoji) => toggleReaction(msg.id, emoji)}
+                          isMine={mine}
+                        />
+                      )}
                       <div className={`flex items-center gap-1 mt-0.5 ${mine ? 'mr-1 flex-row-reverse' : 'ml-1'}`}>
                         <span className="text-[10px] text-gray-400">
                           {formatTime(msg.created_at)}
@@ -608,6 +649,33 @@ export default function ChatPage() {
 
         <div ref={bottomRef} />
       </div>
+
+      {reactionTarget && (
+        <ReactionBar
+          messageId={reactionTarget.messageId}
+          position={{ x: reactionTarget.x, y: reactionTarget.y }}
+          onSelectEmoji={(msgId, emoji) => {
+            toggleReaction(msgId, emoji)
+            setReactionTarget(null)
+          }}
+          onOpenFullPicker={(msgId) => {
+            setReactionTarget(null)
+            setEmojiPickerTarget(msgId)
+          }}
+          onClose={() => setReactionTarget(null)}
+        />
+      )}
+
+      {emojiPickerTarget && (
+        <EmojiPicker
+          messageId={emojiPickerTarget}
+          onSelectEmoji={(msgId, emoji) => {
+            toggleReaction(msgId, emoji)
+            setEmojiPickerTarget(null)
+          }}
+          onClose={() => setEmojiPickerTarget(null)}
+        />
+      )}
 
       {dictationTrace && (
         <div className="shrink-0 px-3 pt-2 md:px-4 bg-white border-t border-gray-100">
