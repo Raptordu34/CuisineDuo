@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { supabase } from '../../lib/supabase'
+import { apiPost } from '../../lib/apiClient'
 
 // Agreger l'historique GIF par titre pour l'IA
 function aggregateGifHistory(messages) {
@@ -79,11 +80,7 @@ export default function GifPicker({ onSelect, onClose, messages, profile }) {
       setSearchLoading(true)
     }
     try {
-      const res = await fetch('/api/gif-search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: searchQuery, lang, offset: newOffset }),
-      })
+      const res = await apiPost('/api/gif-search', { query: searchQuery, lang, offset: newOffset })
       if (!res.ok) throw new Error('Search failed')
       const data = await res.json()
       if (append) {
@@ -129,15 +126,11 @@ export default function GifPicker({ onSelect, onClose, messages, profile }) {
         .slice(-15)
         .map(m => ({ content: m.content, is_ai: m.is_ai || false }))
 
-      const res = await fetch('/api/gif-suggest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: contextMessages,
-          gifHistory: aggregated,
-          recentGifs,
-          lang,
-        }),
+      const res = await apiPost('/api/gif-suggest', {
+        messages: contextMessages,
+        gifHistory: aggregated,
+        recentGifs,
+        lang,
       })
 
       if (!res.ok) throw new Error('Suggestion failed')
@@ -194,11 +187,7 @@ export default function GifPicker({ onSelect, onClose, messages, profile }) {
       setTrendingLoading(true)
     }
     try {
-      const res = await fetch('/api/gif-search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lang, offset: newOffset }),
-      })
+      const res = await apiPost('/api/gif-search', { lang, offset: newOffset })
       if (!res.ok) throw new Error('Trending failed')
       const data = await res.json()
       if (append) {

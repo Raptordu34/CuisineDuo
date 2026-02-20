@@ -5,7 +5,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
 
 export default function OnboardingPage() {
-  const { profile, refreshProfile } = useAuth()
+  const { user, profile, refreshProfile } = useAuth()
   const { t } = useLanguage()
   const [mode, setMode] = useState(null) // 'create' | 'join'
   const [householdName, setHouseholdName] = useState('')
@@ -14,7 +14,7 @@ export default function OnboardingPage() {
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
 
-  if (!profile) return <Navigate to="/login" replace />
+  if (!user) return <Navigate to="/login" replace />
   if (profile?.household_id) return <Navigate to="/" replace />
 
   const handleCreate = async (e) => {
@@ -37,7 +37,7 @@ export default function OnboardingPage() {
     const { error: updateErr } = await supabase
       .from('profiles')
       .update({ household_id: household.id })
-      .eq('id', profile.id)
+      .eq('id', user.id)
 
     if (updateErr) {
       setError(updateErr.message)
@@ -68,7 +68,7 @@ export default function OnboardingPage() {
     const { error: updateErr } = await supabase
       .from('profiles')
       .update({ household_id: household.id })
-      .eq('id', profile.id)
+      .eq('id', user.id)
 
     if (updateErr) {
       setError(updateErr.message)

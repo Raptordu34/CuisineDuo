@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './AuthContext'
 import { useLanguage } from './LanguageContext'
 import { supabase } from '../lib/supabase'
+import { apiPost } from '../lib/apiClient'
 import { logAI } from '../lib/aiLogger'
 import { useWakeWord } from '../hooks/useWakeWord'
 
@@ -323,22 +324,18 @@ export function MiamProvider({ children }) {
     try {
       const dynamicContext = collectContext()
 
-      const res = await fetch('/api/miam-orchestrator', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text,
-          lang,
-          currentPage,
-          availableActions,
-          conversationHistory: messages.slice(-10),
-          context: {
-            profileName: profile?.display_name,
-            householdId: profile?.household_id,
-            householdMembers,
-            ...dynamicContext,
-          },
-        }),
+      const res = await apiPost('/api/miam-orchestrator', {
+        message: text,
+        lang,
+        currentPage,
+        availableActions,
+        conversationHistory: messages.slice(-10),
+        context: {
+          profileName: profile?.display_name,
+          householdId: profile?.household_id,
+          householdMembers,
+          ...dynamicContext,
+        },
       })
 
       if (!res.ok) throw new Error('Orchestrator request failed')

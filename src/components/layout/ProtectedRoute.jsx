@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 
 export default function ProtectedRoute({ children }) {
-  const { profile, loading } = useAuth()
+  const { user, profile, loading } = useAuth()
   const { t } = useLanguage()
 
   if (loading) {
@@ -14,7 +14,7 @@ export default function ProtectedRoute({ children }) {
     )
   }
 
-  if (!profile) return <Navigate to="/login" replace />
+  if (!user) return <Navigate to="/login" replace />
 
   if (!profile?.household_id) return <Navigate to="/onboarding" replace />
 

@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from 'react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useAuth } from '../../contexts/AuthContext'
+import { apiPost } from '../../lib/apiClient'
 import { logAI } from '../../lib/aiLogger'
 
 function compressImage(file, maxWidth = 800, quality = 0.6) {
@@ -88,11 +89,7 @@ export default function ScanReceiptButton({ onScanComplete, onError, disabled, s
     try {
       const { base64, mimeType } = await compressImage(file)
 
-      const res = await fetch('/api/scan-receipt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: base64, mimeType, lang, mode }),
-      })
+      const res = await apiPost('/api/scan-receipt', { image: base64, mimeType, lang, mode })
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))

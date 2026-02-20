@@ -1,35 +1,63 @@
+import { createClient } from '@supabase/supabase-js'
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, DELETE, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   if (req.method === 'OPTIONS') return res.status(200).end()
 
+  // Verification du JWT
+  const authHeader = req.headers.authorization
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' })
+  }
+  const token = authHeader.split(' ')[1]
+
   const supabaseUrl = process.env.VITE_SUPABASE_URL
-  const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY
-  if (!supabaseUrl || !supabaseKey) {
-    return res.status(500).json({ error: 'Supabase not configured' })
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!supabaseUrl || !serviceRoleKey) {
+    return res.status(500).json({ error: 'Server configuration error' })
+  }
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey)
+
+  // Verifier l'identite de l'utilisateur
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+  if (authError || !user) {
+    return res.status(401).json({ error: 'Invalid token' })
+  }
+
+  // Recuperer le profil pour le household_id
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('id, household_id')
+    .eq('id', user.id)
+    .single()
+
+  if (profileError || !profile) {
+    return res.status(403).json({ error: 'Profile not found' })
   }
 
   if (req.method === 'POST') {
-    const { profile_id, household_id, subscription } = req.body
-    if (!profile_id || !household_id || !subscription) {
-      return res.status(400).json({ error: 'Missing fields' })
+    const { subscription } = req.body
+    if (!subscription) {
+      return res.status(400).json({ error: 'Missing subscription' })
     }
 
-    const response = await fetch(`${supabaseUrl}/rest/v1/push_subscriptions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        Prefer: 'resolution=merge-duplicates',
-      },
-      body: JSON.stringify({ profile_id, household_id, subscription }),
-    })
+    // Utiliser l'identite verifiee
+    const { error: insertError } = await supabase
+      .from('push_subscriptions')
+      .upsert(
+        {
+          profile_id: user.id,
+          household_id: profile.household_id,
+          subscription,
+        },
+        { onConflict: 'profile_id,subscription->>endpoint' }
+      )
 
-    if (!response.ok) {
-      const text = await response.text()
-      console.error('Supabase insert error:', text)
+    if (insertError) {
+      console.error('Supabase insert error:', insertError.message)
       return res.status(500).json({ error: 'Failed to save subscription' })
     }
 
@@ -37,26 +65,19 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'DELETE') {
-    const { profile_id, subscription } = req.body
-    if (!profile_id || !subscription) {
-      return res.status(400).json({ error: 'Missing fields' })
+    const { subscription } = req.body
+    if (!subscription) {
+      return res.status(400).json({ error: 'Missing subscription' })
     }
 
-    const endpoint = encodeURIComponent(subscription.endpoint)
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/push_subscriptions?profile_id=eq.${profile_id}&subscription->>endpoint=eq.${endpoint}`,
-      {
-        method: 'DELETE',
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-      }
-    )
+    const { error: deleteError } = await supabase
+      .from('push_subscriptions')
+      .delete()
+      .eq('profile_id', user.id)
+      .eq('subscription->>endpoint', subscription.endpoint)
 
-    if (!response.ok) {
-      const text = await response.text()
-      console.error('Supabase delete error:', text)
+    if (deleteError) {
+      console.error('Supabase delete error:', deleteError.message)
       return res.status(500).json({ error: 'Failed to delete subscription' })
     }
 
