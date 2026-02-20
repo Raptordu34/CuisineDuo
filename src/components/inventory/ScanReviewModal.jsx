@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { apiPost } from '../../lib/apiClient'
 import ScanReviewItemRow from './ScanReviewItemRow'
 import DictationButton from '../DictationButton'
 import DictationTrace from '../DictationTrace'
@@ -41,11 +42,7 @@ export default function ScanReviewModal({ items: initialItems, receiptTotal, onC
     if (!text.trim()) return
     setDictationCorrecting(true)
     try {
-      const res = await fetch('/api/correct-transcription', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, context: 'scan-correction', lang: dictLang || lang, items }),
-      })
+      const res = await apiPost('/api/correct-transcription', { text, context: 'scan-correction', lang: dictLang || lang, items })
       if (res.ok) {
         const data = await res.json()
         if (data.items && Array.isArray(data.items)) {

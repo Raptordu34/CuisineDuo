@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { apiPost } from '../lib/apiClient'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useMiamActions } from '../hooks/useMiamActions'
@@ -314,15 +315,9 @@ export default function ChatPage() {
     markAsRead()
 
     // Fire-and-forget push notification
-    fetch('/api/send-notification', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        household_id: profile.household_id,
-        sender_profile_id: profile.id,
-        title: profile.display_name,
-        body: content.length > 100 ? content.slice(0, 100) + '...' : content,
-      }),
+    apiPost('/api/send-notification', {
+      title: profile.display_name,
+      body: content.length > 100 ? content.slice(0, 100) + '...' : content,
     }).catch(() => {})
 
     setSending(false)
@@ -347,15 +342,9 @@ export default function ChatPage() {
 
     markAsRead()
 
-    fetch('/api/send-notification', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        household_id: profile.household_id,
-        sender_profile_id: profile.id,
-        title: profile.display_name,
-        body: t('chat.sentGif'),
-      }),
+    apiPost('/api/send-notification', {
+      title: profile.display_name,
+      body: t('chat.sentGif'),
     }).catch(() => {})
 
     setSending(false)
@@ -375,11 +364,7 @@ export default function ChatPage() {
         author: msg.is_ai ? 'Miam (AI assistant)' : (msg.profiles?.display_name || 'User'),
         content: msg.content,
       }))
-      const res = await fetch('/api/correct-transcription', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, context: 'chat', lang: dictLang || lang, chatHistory, householdMembers }),
-      })
+      const res = await apiPost('/api/correct-transcription', { text, context: 'chat', lang: dictLang || lang, chatHistory, householdMembers })
       if (res.ok) {
         const data = await res.json()
         setNewMessage((prev) => prev ? prev + ' ' + data.corrected : data.corrected)

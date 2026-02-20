@@ -1,11 +1,44 @@
 import webpush from 'web-push'
+import { createClient } from '@supabase/supabase-js'
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+
+  // Verification du JWT
+  const authHeader = req.headers.authorization
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' })
+  }
+  const token = authHeader.split(' ')[1]
+
+  const supabaseUrl = process.env.VITE_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!supabaseUrl || !serviceRoleKey) {
+    return res.status(500).json({ error: 'Server configuration error' })
+  }
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey)
+
+  // Verifier l'identite de l'utilisateur via le JWT
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+  if (authError || !user) {
+    return res.status(401).json({ error: 'Invalid token' })
+  }
+
+  // Recuperer le profil pour obtenir le household_id verifie
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('id, household_id')
+    .eq('id', user.id)
+    .single()
+
+  if (profileError || !profile?.household_id) {
+    return res.status(403).json({ error: 'No household found' })
+  }
 
   const vapidPublic = process.env.VITE_VAPID_PUBLIC_KEY
   const vapidPrivate = process.env.VAPID_PRIVATE_KEY
@@ -15,37 +48,26 @@ export default async function handler(req, res) {
 
   webpush.setVapidDetails('mailto:noreply@cuisineduo.app', vapidPublic, vapidPrivate)
 
-  const supabaseUrl = process.env.VITE_SUPABASE_URL
-  const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY
+  const { title, body } = req.body
 
-  const { household_id, sender_profile_id, title, body } = req.body
-  if (!household_id || !sender_profile_id) {
-    return res.status(400).json({ error: 'Missing fields' })
-  }
+  // Utiliser le household_id verifie du profil, pas celui du client
+  const { data: subscriptions, error: subError } = await supabase
+    .from('push_subscriptions')
+    .select('id, subscription')
+    .eq('household_id', profile.household_id)
+    .neq('profile_id', user.id)
 
-  // Fetch all subscriptions for this household except sender
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/push_subscriptions?household_id=eq.${encodeURIComponent(household_id)}&profile_id=neq.${encodeURIComponent(sender_profile_id)}&select=id,subscription`,
-    {
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-      },
-    }
-  )
-
-  if (!response.ok) {
-    console.error('Failed to fetch subscriptions')
+  if (subError) {
+    console.error('Failed to fetch subscriptions:', subError.message)
     return res.status(500).json({ error: 'Failed to fetch subscriptions' })
   }
 
-  const subscriptions = await response.json()
   const payload = JSON.stringify({ title: title || 'CuisineDuo', body: body || '' })
 
   const expiredIds = []
 
   await Promise.allSettled(
-    subscriptions.map(async (sub) => {
+    (subscriptions || []).map(async (sub) => {
       try {
         await webpush.sendNotification(sub.subscription, payload, {
           urgency: 'high',
@@ -61,20 +83,13 @@ export default async function handler(req, res) {
     })
   )
 
-  // Clean up expired subscriptions
+  // Nettoyer les subscriptions expirees
   if (expiredIds.length > 0) {
-    const idsParam = expiredIds.map((id) => `"${encodeURIComponent(id)}"`).join(',')
-    await fetch(
-      `${supabaseUrl}/rest/v1/push_subscriptions?id=in.(${idsParam})`,
-      {
-        method: 'DELETE',
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-      }
-    )
+    await supabase
+      .from('push_subscriptions')
+      .delete()
+      .in('id', expiredIds)
   }
 
-  return res.status(200).json({ sent: subscriptions.length - expiredIds.length, expired: expiredIds.length })
+  return res.status(200).json({ sent: (subscriptions || []).length - expiredIds.length, expired: expiredIds.length })
 }
