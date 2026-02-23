@@ -52,18 +52,43 @@ public/          # Manifest PWA, Service Worker, icones
 ### Gestion d'etat
 
 - **React Context API** uniquement (pas de Redux/Zustand)
-- `AuthContext` : profil courant, stocke en `localStorage` sous la cle `'profileId'`
-- `LanguageContext` : langue courante (`'fr'`/`'en'`/`'zh'`), stockee en `localStorage` sous `'lang'`
+- `AuthContext` : expose `{ user, profile, loading, passwordRecovery, signIn, signUp, signOut, resetPassword, updatePassword, refreshProfile }`. La session est geree par Supabase Auth (token stocke automatiquement dans `localStorage` par le client Supabase). `LanguageContext` : langue courante (`'fr'`/`'en'`/`'zh'`), stockee en `localStorage` sous `'lang'`
 - Etat local avec `useState`/`useEffect` dans les composants
 - **Supabase Realtime** pour la synchronisation inter-appareils (messages, votes, inventaire)
 
 ### Authentification
 
-Systeme simplifie par **selection de profil** (sans mot de passe) :
-1. L'utilisateur choisit un profil sur `LoginPage`
-2. Le `profileId` est sauvegarde dans `localStorage`
-3. `AuthContext` fournit l'objet `profile` avec `id`, `display_name`, `household_id`
-4. `ProtectedRoute` redirige vers `/login` si pas de profil, vers `/onboarding` si pas de `household_id`
+Systeme base sur **Supabase Auth** (email + mot de passe) :
+1. L'utilisateur s'inscrit avec email/mot de passe + `display_name` → Supabase cree un `auth.users` et un trigger cree automatiquement la ligne `profiles` correspondante (meme `id`)
+2. La session est persistee automatiquement par le client Supabase JS
+3. `AuthContext` ecoute `supabase.auth.onAuthStateChange` comme **unique source de verite** pour la session
+4. Apres `SIGNED_IN`, `AuthContext` charge le `profile` depuis la table `profiles` (meme `id` que `auth.users`)
+5. `AuthContext` fournit `user` (objet Supabase Auth) et `profile` (ligne de la table `profiles` avec `id`, `display_name`, `household_id`)
+6. `ProtectedRoute` redirige vers `/login` si `!user`, vers `/onboarding` si `!profile?.household_id`
+7. **Reset de mot de passe** : email avec lien → `PASSWORD_RECOVERY` event → redirect vers `/reset-password` → `updatePassword()`
+
+**Piege technique — deadlock Supabase `onAuthStateChange`** :
+Ne jamais faire `await supabase.from(...).select(...)` directement dans le callback `onAuthStateChange` — le client Supabase tient un verrou interne pendant le callback, ce qui bloque toute requete DB et provoque un deadlock (la requete ne se resout jamais). Solution : envelopper dans `setTimeout(async () => { ... }, 0)` pour sortir du verrou avant d'executer la requete.
+
+```javascript
+// CORRECT
+supabase.auth.onAuthStateChange((event, session) => {
+  if (session?.user) {
+    setUser(session.user)
+    setTimeout(async () => {
+      const data = await fetchProfile(session.user.id) // OK hors du verrou
+      setProfile(data)
+    }, 0)
+  }
+})
+
+// INCORRECT — deadlock garanti
+supabase.auth.onAuthStateChange(async (event, session) => {
+  if (session?.user) {
+    const data = await fetchProfile(session.user.id) // bloque indefiniment
+  }
+})
+```
 
 ### Internationalisation
 
@@ -80,8 +105,9 @@ Toutes les routes sont definies dans `src/App.jsx` :
 
 | Route | Page | Layout | Notes |
 |-------|------|--------|-------|
-| `/login` | LoginPage | Non | Publique |
+| `/login` | LoginPage | Non | Publique — affiche loader si session en cours de restauration |
 | `/onboarding` | OnboardingPage | Non | Publique |
+| `/reset-password` | ResetPasswordPage | Non | Publique — accessible uniquement via lien email (`passwordRecovery=true`) |
 | `/` | HomePage | Oui | Dashboard |
 | `/inventory` | InventoryPage | Oui | |
 | `/recipes` | RecipesPage | Oui | |
@@ -92,6 +118,7 @@ Toutes les routes sont definies dans `src/App.jsx` :
 | `/shopping` | ShoppingListPage | Oui | |
 | `/swipe/:sessionId` | SwipePage | **Non** | Plein ecran |
 | `/swipe/:sessionId/results` | SwipeResultsPage | Oui | |
+| `/ai-logs` | AILogsPage | **Non** | Protegee, sans Layout |
 
 Le `Layout` inclut la `Navbar` (barre de navigation mobile en bas + barre desktop en haut) et un conteneur `max-w-5xl`.
 
@@ -169,11 +196,11 @@ RLS : ouvert (anyone can read/create/update).
 
 ### 2. profiles
 
-Membres d'un foyer. Pas d'authentification par mot de passe.
+Membres d'un foyer. Cree automatiquement par trigger Supabase a l'inscription. **L'`id` est identique a celui de `auth.users`** (pas d'UUID separe).
 
 | Colonne | Type | Contraintes |
 |---------|------|-------------|
-| `id` | UUID | PK |
+| `id` | UUID | PK, = `auth.users.id` |
 | `display_name` | TEXT | NOT NULL |
 | `household_id` | UUID | FK → households(id) ON DELETE SET NULL |
 | `created_at` | TIMESTAMPTZ | default now() |

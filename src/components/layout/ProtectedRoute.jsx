@@ -7,6 +7,7 @@ export default function ProtectedRoute({ children }) {
   const { t } = useLanguage()
 
   if (loading) {
+    console.log('[ProtectedRoute] loading...')
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-gray-500">{t('common.loading')}</p>
@@ -14,9 +15,16 @@ export default function ProtectedRoute({ children }) {
     )
   }
 
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) {
+    console.log('[ProtectedRoute] no user → redirect /login')
+    return <Navigate to="/login" replace />
+  }
 
-  if (!profile?.household_id) return <Navigate to="/onboarding" replace />
+  if (!profile?.household_id) {
+    console.log('[ProtectedRoute] no household_id (profile=', profile, ') → redirect /onboarding')
+    return <Navigate to="/onboarding" replace />
+  }
 
+  console.log('[ProtectedRoute] OK user=', user.id, 'profile=', profile.id)
   return children
 }
