@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useMiamActions } from '../hooks/useMiamActions'
 import { useMiam } from '../contexts/MiamContext'
-import DictationButton from '../components/DictationButton'
+import VoiceRecorder from '../components/VoiceRecorder'
 import DictationTrace from '../components/DictationTrace'
 import GifPicker from '../components/chat/GifPicker'
 import MessageContextMenu from '../components/chat/MessageContextMenu'
@@ -887,7 +887,7 @@ export default function ChatPage() {
           </button>
 
           {/* Dictation */}
-          <DictationButton
+          <VoiceRecorder
             onResult={handleDictationResult}
             disabled={sending || dictationCorrecting}
             color="orange"

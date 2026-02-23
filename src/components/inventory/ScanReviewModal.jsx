@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from 'react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { apiPost } from '../../lib/apiClient'
 import ScanReviewItemRow from './ScanReviewItemRow'
-import DictationButton from '../DictationButton'
+import VoiceRecorder from '../VoiceRecorder'
 import DictationTrace from '../DictationTrace'
 
 export default function ScanReviewModal({ items: initialItems, receiptTotal, onClose, onConfirm }) {
@@ -79,7 +79,7 @@ export default function ScanReviewModal({ items: initialItems, receiptTotal, onC
         <div className="p-4 border-b border-gray-200 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-bold text-gray-900">{t('inventory.scanReview')}</h2>
-            <DictationButton
+            <VoiceRecorder
               onResult={handleDictationResult}
               disabled={saving || dictationCorrecting}
               color="orange"

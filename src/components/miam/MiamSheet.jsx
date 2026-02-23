@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useMiam } from '../../contexts/MiamContext'
 import { useLanguage } from '../../contexts/LanguageContext'
-import DictationButton from '../DictationButton'
+import { useBottomSheetDrag } from '../../hooks/useBottomSheetDrag'
+import VoiceRecorder from '../VoiceRecorder'
 
 function MiamBotIcon() {
   return (
@@ -123,6 +124,15 @@ export default function MiamSheet() {
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
 
+  const { sheetStyle, handleProps, resetHeight } = useBottomSheetDrag({ onClose: closeSheet })
+
+  // Reset la hauteur a chaque ouverture
+  useEffect(() => {
+    if (isSheetOpen) {
+      resetHeight()
+    }
+  }, [isSheetOpen, resetHeight])
+
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -171,7 +181,18 @@ export default function MiamSheet() {
       />
 
       {/* Sheet */}
-      <div className="fixed bottom-0 inset-x-0 z-[60] bg-white rounded-t-2xl shadow-2xl flex flex-col max-h-[80vh] animate-[slideUp_0.3s_ease-out]">
+      <div
+        className="fixed bottom-0 inset-x-0 z-[60] bg-white rounded-t-2xl shadow-2xl flex flex-col animate-[slideUp_0.3s_ease-out]"
+        style={sheetStyle}
+      >
+
+        {/* Drag handle */}
+        <div
+          {...handleProps}
+          className="flex items-center justify-center py-2 shrink-0"
+        >
+          <div className="w-10 h-1 rounded-full bg-gray-300" />
+        </div>
 
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
@@ -244,7 +265,7 @@ export default function MiamSheet() {
         {/* Input */}
         <div className="px-4 py-3 border-t border-gray-100 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
           <div className="flex items-end gap-2">
-            <DictationButton
+            <VoiceRecorder
               onResult={handleDictationResult}
               disabled={isLoading}
               color="indigo"
