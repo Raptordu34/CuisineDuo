@@ -19,33 +19,40 @@ export function UnreadMessagesProvider({ children }) {
   // Requete pour compter les messages non lus
   const fetchUnreadCount = useCallback(async () => {
     if (!profileId || !householdId) return
-    const since = lastReadAtState.current || new Date(0).toISOString()
+    try {
+      const since = lastReadAtState.current || new Date(0).toISOString()
 
-    const { count } = await supabase
-      .from('messages')
-      .select('*', { count: 'exact', head: true })
-      .eq('household_id', householdId)
-      .neq('profile_id', profileId)
-      .gt('created_at', since)
+      const { count } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('household_id', householdId)
+        .neq('profile_id', profileId)
+        .gt('created_at', since)
 
-    if (count != null) setUnreadCount(count)
+      if (count != null) setUnreadCount(count)
+    } catch {
+      // Reseau indisponible — garder la valeur actuelle
+    }
   }, [profileId, householdId])
 
   // Charger le last_read_at depuis Supabase
   const fetchLastReadAt = useCallback(async () => {
     if (!profileId || !householdId) return null
+    try {
+      const { data } = await supabase
+        .from('chat_read_status')
+        .select('last_read_at')
+        .eq('profile_id', profileId)
+        .eq('household_id', householdId)
+        .single()
 
-    const { data } = await supabase
-      .from('chat_read_status')
-      .select('last_read_at')
-      .eq('profile_id', profileId)
-      .eq('household_id', householdId)
-      .single()
-
-    const ts = data?.last_read_at || new Date(0).toISOString()
-    lastReadAtState.current = ts
-    if (!lastReadAtRef.current) lastReadAtRef.current = ts
-    return ts
+      const ts = data?.last_read_at || new Date(0).toISOString()
+      lastReadAtState.current = ts
+      if (!lastReadAtRef.current) lastReadAtRef.current = ts
+      return ts
+    } catch {
+      return null
+    }
   }, [profileId, householdId])
 
   // Fermer les notifications push liées au chat
@@ -80,14 +87,17 @@ export function UnreadMessagesProvider({ children }) {
   // Charger les read statuses des autres membres du foyer
   const fetchReadStatuses = useCallback(async () => {
     if (!householdId || !profileId) return
+    try {
+      const { data } = await supabase
+        .from('chat_read_status')
+        .select('profile_id, last_read_at, profiles(display_name)')
+        .eq('household_id', householdId)
+        .neq('profile_id', profileId)
 
-    const { data } = await supabase
-      .from('chat_read_status')
-      .select('profile_id, last_read_at, profiles(display_name)')
-      .eq('household_id', householdId)
-      .neq('profile_id', profileId)
-
-    if (data) setReadStatuses(data)
+      if (data) setReadStatuses(data)
+    } catch {
+      // Reseau indisponible — garder les statuts actuels
+    }
   }, [householdId, profileId])
 
   useEffect(() => {
@@ -98,9 +108,13 @@ export function UnreadMessagesProvider({ children }) {
     let mounted = true
 
     const init = async () => {
-      await fetchLastReadAt()
-      await fetchReadStatuses()
-      await fetchUnreadCount()
+      try {
+        await fetchLastReadAt()
+        await fetchReadStatuses()
+        await fetchUnreadCount()
+      } catch {
+        // Init echoue (offline) — pas bloquant
+      }
     }
 
     const startPolling = () => {

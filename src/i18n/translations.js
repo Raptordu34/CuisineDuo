@@ -225,6 +225,17 @@ export const translations = {
     'miam.suggest.addItem': 'Ajouter un article',
     'miam.suggest.whatToCook': 'Qu\'est-ce qu\'on mange ce soir ?',
     'miam.suggest.sendMessage': 'Envoyer un message au foyer',
+
+    // Connexion
+    'connection.offline': 'Mode hors ligne',
+    'connection.syncing': 'Synchronisation en cours...',
+    'connection.restored': 'Connexion retablie',
+    'connection.offlineWarning': 'Les donnees affichees peuvent ne pas etre a jour',
+    'connection.allOk': 'Connecte',
+    'connection.issues': 'Probleme de connexion',
+    'connection.network': 'Reseau',
+    'connection.database': 'Base de donnees',
+    'connection.ai': 'IA',
   },
 
   en: {
@@ -453,6 +464,17 @@ export const translations = {
     'miam.suggest.addItem': 'Add an item',
     'miam.suggest.whatToCook': 'What should we eat tonight?',
     'miam.suggest.sendMessage': 'Send a message to the household',
+
+    // Connection
+    'connection.offline': 'Offline mode',
+    'connection.syncing': 'Syncing...',
+    'connection.restored': 'Connection restored',
+    'connection.offlineWarning': 'Data shown may not be up to date',
+    'connection.allOk': 'Connected',
+    'connection.issues': 'Connection issue',
+    'connection.network': 'Network',
+    'connection.database': 'Database',
+    'connection.ai': 'AI',
   },
 
   zh: {
@@ -681,5 +703,16 @@ export const translations = {
     'miam.suggest.addItem': '\u6dfb\u52a0\u7269\u54c1',
     'miam.suggest.whatToCook': '\u4eca\u665a\u5403\u4ec0\u4e48\uff1f',
     'miam.suggest.sendMessage': '\u7ed9\u5bb6\u5ead\u53d1\u6d88\u606f',
+
+    // \u8fde\u63a5
+    'connection.offline': '\u79bb\u7ebf\u6a21\u5f0f',
+    'connection.syncing': '\u540c\u6b65\u4e2d...',
+    'connection.restored': '\u8fde\u63a5\u5df2\u6062\u590d',
+    'connection.offlineWarning': '\u663e\u793a\u7684\u6570\u636e\u53ef\u80fd\u4e0d\u662f\u6700\u65b0\u7684',
+    'connection.allOk': '\u5df2\u8fde\u63a5',
+    'connection.issues': '\u8fde\u63a5\u95ee\u9898',
+    'connection.network': '\u7f51\u7edc',
+    'connection.database': '\u6570\u636e\u5e93',
+    'connection.ai': 'AI',
   },
 }

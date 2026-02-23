@@ -11,7 +11,17 @@ export default function HomePage() {
   const { t } = useLanguage()
   const navigate = useNavigate()
   const { supported, permission, subscribed, subscribe } = useNotifications()
-  const [stats, setStats] = useState({ inStock: 0, expenses: 0, expiringSoon: 0 })
+  const STATS_CACHE_KEY = 'cachedDashboardStats'
+
+  // Charger les stats cachees en premier
+  const getCachedStats = () => {
+    try {
+      const cached = localStorage.getItem(STATS_CACHE_KEY)
+      return cached ? JSON.parse(cached) : { inStock: 0, expenses: 0, expiringSoon: 0 }
+    } catch { return { inStock: 0, expenses: 0, expiringSoon: 0 } }
+  }
+
+  const [stats, setStats] = useState(getCachedStats)
 
   // Miam orchestrator: no page-specific actions (navigate is built-in)
   useMiamActions({})
@@ -47,12 +57,16 @@ export default function HomePage() {
         const purchaseTotal = items.reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0)
         const consumedTotal = consumed ? consumed.reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0) : 0
 
-        setStats({
+        const newStats = {
           inStock: items.length,
           expenses: (purchaseTotal + consumedTotal).toFixed(2),
           expiringSoon,
-        })
+        }
+
+        setStats(newStats)
+        localStorage.setItem(STATS_CACHE_KEY, JSON.stringify(newStats))
       } catch (err) {
+        // Reseau indisponible — garder les stats cachees
         console.error('Failed to fetch dashboard stats:', err)
       }
     }
