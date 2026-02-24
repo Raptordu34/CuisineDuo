@@ -6,6 +6,9 @@ import { useLanguage } from '../contexts/LanguageContext'
 const LANGS = ['fr', 'en', 'zh']
 const LANG_LABELS = { fr: 'FR', en: 'EN', zh: 'ZH' }
 
+// Mobile Android : pas de getUserMedia pour le waveform (conflit micro)
+const isMobileAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
+
 function WaveformBars({ frequencyData, color }) {
   const barColor = color === 'indigo' ? 'bg-indigo-500' : 'bg-orange-500'
 
@@ -27,7 +30,7 @@ function WaveformBars({ frequencyData, color }) {
 
 export default function VoiceRecorder({ onResult, disabled, className = '', color = 'orange', popoverDirection = 'down' }) {
   const { t, lang: appLang } = useLanguage()
-  const { isListening, transcript, startListening, stopListening, isSupported, error } = useDictation()
+  const { isListening, transcript, currentPhrase, startListening, stopListening, isSupported, error } = useDictation()
   const { frequencyData, start: startWaveform, stop: stopWaveform } = useAudioWaveform()
   const [dictLang, setDictLang] = useState(appLang)
   const [isHoldMode, setIsHoldMode] = useState(false)
@@ -55,6 +58,14 @@ export default function VoiceRecorder({ onResult, disabled, className = '', colo
     }
   }, [transcript])
 
+  // Desktop : arreter le waveform quand isListening passe a false
+  // (permet au Speech API de finir avant de tuer les tracks audio)
+  useEffect(() => {
+    if (!isListening && !isMobileAndroid) {
+      stopWaveform()
+    }
+  }, [isListening, stopWaveform])
+
   const cycleLang = useCallback(() => {
     if (isListening) return
     setDictLang((prev) => {
@@ -63,15 +74,26 @@ export default function VoiceRecorder({ onResult, disabled, className = '', colo
     })
   }, [isListening])
 
-  const doStartListening = useCallback(() => {
-    startListening(dictLangRef.current)
-    // Demarrer le waveform en parallele (fire-and-forget)
-    startWaveform()
+  const doStartListening = useCallback(async () => {
+    if (isMobileAndroid) {
+      // Mobile : waveform simule (synchrone) + startListening en parallele
+      startWaveform()
+      startListening(dictLangRef.current)
+    } else {
+      // Desktop : acquérir le micro via waveform d'abord, puis lancer le Speech API
+      await startWaveform()
+      startListening(dictLangRef.current)
+    }
   }, [startListening, startWaveform])
 
   const doStopListening = useCallback(() => {
+    // Arreter la reconnaissance vocale
     stopListening()
-    stopWaveform()
+    if (isMobileAndroid) {
+      // Mobile : arreter le waveform immediatement (pas de tracks audio a proteger)
+      stopWaveform()
+    }
+    // Desktop : le waveform est arrete via useEffect quand isListening → false
   }, [stopListening, stopWaveform])
 
   const onPointerDown = useCallback((e) => {
@@ -193,8 +215,8 @@ export default function VoiceRecorder({ onResult, disabled, className = '', colo
             popoverDirection === 'up' ? 'top-full -mt-1' : 'bottom-full mt-1'
           }`} />
           <WaveformBars frequencyData={frequencyData} color={color} />
-          {transcript && (
-            <p className="mt-1.5 whitespace-pre-wrap text-center opacity-80">{transcript}</p>
+          {currentPhrase && (
+            <p className="mt-1.5 whitespace-pre-wrap text-center opacity-80">{currentPhrase}</p>
           )}
         </div>
       )}

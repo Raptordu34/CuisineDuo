@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useMiam } from '../../contexts/MiamContext'
+import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useBottomSheetDrag } from '../../hooks/useBottomSheetDrag'
+import { apiPost } from '../../lib/apiClient'
+import { logAI } from '../../lib/aiLogger'
 import VoiceRecorder from '../VoiceRecorder'
 
 function MiamBotIcon() {
@@ -117,8 +120,10 @@ export default function MiamSheet() {
     messages, sendMessage, clearConversation, isLoading,
     getCurrentPage,
     ttsEnabled, toggleTTS,
+    householdMembers,
   } = useMiam()
-  const { t } = useLanguage()
+  const { profile } = useAuth()
+  const { t, lang } = useLanguage()
 
   const [input, setInput] = useState('')
   const messagesEndRef = useRef(null)
@@ -164,11 +169,44 @@ export default function MiamSheet() {
     sendMessage(text)
   }, [sendMessage])
 
-  const handleDictationResult = useCallback((text) => {
-    if (text.trim()) {
-      sendMessage(text.trim())
+  const [dictationCorrecting, setDictationCorrecting] = useState(false)
+
+  const handleDictationResult = useCallback(async (text, dictLang) => {
+    if (!text.trim()) return
+    setDictationCorrecting(true)
+    const t0 = Date.now()
+    try {
+      const chatHistory = messages.slice(-10).map(msg => ({
+        author: msg.role === 'miam' ? 'Miam (AI assistant)' : (profile?.display_name || 'User'),
+        content: msg.content,
+      }))
+      const res = await apiPost('/api/correct-transcription', {
+        text,
+        context: 'chat',
+        lang: dictLang || lang,
+        chatHistory,
+        householdMembers,
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setInput(prev => prev ? prev + ' ' + data.corrected : data.corrected)
+        logAI({
+          householdId: profile?.household_id,
+          profileId: profile?.id,
+          endpoint: 'correct-transcription',
+          input: { text, context: 'chat', lang: dictLang || lang },
+          output: { corrected: data.corrected },
+          durationMs: Date.now() - t0,
+        })
+      } else {
+        setInput(prev => prev ? prev + ' ' + text : text)
+      }
+    } catch {
+      setInput(prev => prev ? prev + ' ' + text : text)
+    } finally {
+      setDictationCorrecting(false)
     }
-  }, [sendMessage])
+  }, [lang, messages, householdMembers, profile])
 
   if (!isSheetOpen) return null
 
@@ -267,7 +305,7 @@ export default function MiamSheet() {
           <div className="flex items-end gap-2">
             <VoiceRecorder
               onResult={handleDictationResult}
-              disabled={isLoading}
+              disabled={isLoading || dictationCorrecting}
               color="indigo"
               popoverDirection="up"
             />
