@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { apiPost } from '../../lib/apiClient'
@@ -83,11 +84,18 @@ export default function ScanReceiptButton({ onScanComplete, onError, disabled, s
     const file = e.target.files?.[0]
     if (!file) return
 
+    console.log(`[ScanReceipt] file selected: ${file.size}`)
+
+    // On mobile, returning from native camera can leave the browser renderer frozen.
+    // Wait two animation frames to ensure the browser is fully resumed before updating state.
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
+
     setScanning(true)
     const t0 = Date.now()
     const mode = selectedMode || 'auto'
     try {
       const { base64, mimeType } = await compressImage(file)
+      console.log('[ScanReceipt] compressed, sending to API')
 
       const res = await apiPost('/api/scan-receipt', { image: base64, mimeType, lang, mode })
 
@@ -97,6 +105,7 @@ export default function ScanReceiptButton({ onScanComplete, onError, disabled, s
       }
 
       const data = await res.json()
+      console.log(`[ScanReceipt] API response: ${data.items?.length} items`)
       if (data.items && data.items.length > 0) {
         logAI({
           householdId: profile?.household_id,
@@ -106,6 +115,7 @@ export default function ScanReceiptButton({ onScanComplete, onError, disabled, s
           output: { itemCount: data.items.length, receiptTotal: data.receipt_total ?? null },
           durationMs: Date.now() - t0,
         })
+        console.log('[ScanReceipt] calling onScanComplete')
         onScanComplete(data.items, data.receipt_total ?? null)
       } else {
         logAI({
@@ -120,6 +130,7 @@ export default function ScanReceiptButton({ onScanComplete, onError, disabled, s
         onError?.(t('inventory.scanNoItems'))
       }
     } catch (err) {
+      console.log(`[ScanReceipt] error: ${err.message}`)
       logAI({
         householdId: profile?.household_id,
         profileId: profile?.id,
@@ -198,6 +209,19 @@ export default function ScanReceiptButton({ onScanComplete, onError, disabled, s
           </>
         )}
       </button>
+
+      {/* Fullscreen scanning overlay — rendered via portal to stay above MiamSheet */}
+      {scanning && createPortal(
+        <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-black/60">
+          <svg className="animate-spin w-10 h-10 text-white mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <p className="text-white text-lg font-medium">{t('inventory.scanning')}</p>
+          <p className="text-white/60 text-sm mt-1">{t('inventory.scanAnalyzing')}</p>
+        </div>,
+        document.body
+      )}
 
       {showDropdown && !scanning && (
         <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-50">

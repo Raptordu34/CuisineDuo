@@ -291,6 +291,24 @@ export function MiamProvider({ children }) {
       return error ? { success: false, error: error.message } : { success: true }
     }
 
+    // Built-in: openScanner (navigate to inventory if needed, then trigger scanner)
+    if (name === 'openScanner') {
+      const scanArgs = { source: args.source || 'camera', mode: args.mode || 'auto' }
+      const pageHandler = actionsRef.current['openScanner']
+      if (pageHandler) {
+        // Already on inventory page — trigger directly
+        try {
+          await pageHandler.handler(scanArgs)
+          return { success: true }
+        } catch (err) {
+          return { success: false, error: err.message }
+        }
+      }
+      // Navigate to inventory with scanner state
+      navigate('/inventory', { state: { openScanner: scanArgs } })
+      return { success: true }
+    }
+
     // Actions enregistrées par les pages
     const handler = actionsRef.current[name]
     if (handler) {
@@ -338,7 +356,10 @@ export function MiamProvider({ children }) {
         },
       })
 
-      if (!res.ok) throw new Error('Orchestrator request failed')
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}))
+        throw new Error(errBody.detail || errBody.error || `HTTP ${res.status}`)
+      }
       const data = await res.json()
       const durationMs = Date.now() - t0
 
@@ -349,6 +370,14 @@ export function MiamProvider({ children }) {
           const result = await executeAction(action)
           executedActions.push({ ...action, result })
         }
+      }
+
+      // Fermer le sheet si une action nécessitant une interaction visuelle a réussi
+      const shouldCloseSheet = executedActions.some(a =>
+        ['navigate', 'openScanner'].includes(a.name) && a.result?.success
+      )
+      if (shouldCloseSheet) {
+        setIsSheetOpen(false)
       }
 
       const miamMessage = {

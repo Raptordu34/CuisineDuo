@@ -152,7 +152,7 @@ const ALL_TOOL_DECLARATIONS = [
 ]
 
 // Actions toujours disponibles, quel que soit l'onglet actif
-const ALWAYS_AVAILABLE = ['navigate', 'sendChatMessage', 'editLastChatMessage', 'deleteLastChatMessage', 'addInventoryItem', 'updateInventoryItem', 'consumeInventoryItem', 'deleteInventoryItem']
+const ALWAYS_AVAILABLE = ['navigate', 'sendChatMessage', 'editLastChatMessage', 'deleteLastChatMessage', 'addInventoryItem', 'updateInventoryItem', 'consumeInventoryItem', 'deleteInventoryItem', 'openScanner']
 
 function buildSystemPrompt(lang, currentPage, context, availableActions) {
   const pageNames = { home: 'accueil/dashboard', inventory: 'inventaire alimentaire', chat: 'chat du foyer' }
@@ -295,40 +295,28 @@ export default async function handler(req, res) {
     tools: [{ functionDeclarations: filteredDeclarations }],
   })
 
-  // Formater l'historique en respectant le format Gemini pour le function calling.
-  // Un tour Miam avec actions doit être décomposé en :
-  //   1. model[functionCall parts]
-  //   2. user[functionResponse parts]   ← requis par l'API Gemini
-  //   3. model[text]                     ← réponse textuelle (si présente)
+  // Formater l'historique pour Gemini startChat.
+  // Les functionCall/functionResponse ne peuvent pas être injectés dans l'historique
+  // avec startChat (erreur "user can't contain functionResponse").
+  // On simplifie : les messages miam avec actions deviennent un résumé textuel.
   const safeHistory = Array.isArray(conversationHistory) ? conversationHistory : []
   const formattedHistory = []
   for (const msg of safeHistory.slice(-20)) {
     if (msg.role === 'miam' || msg.role === 'model') {
       const hasActions = Array.isArray(msg.actions) && msg.actions.length > 0
+      // Construire un résumé textuel incluant les actions exécutées
+      const parts = []
       if (hasActions) {
-        // Turn 1 : appels de fonction du modèle
-        formattedHistory.push({
-          role: 'model',
-          parts: msg.actions.map(a => ({
-            functionCall: { name: a.name, args: a.args || {} },
-          })),
-        })
-        // Turn 2 : réponses des fonctions (côté "user" dans le protocole Gemini)
-        formattedHistory.push({
-          role: 'user',
-          parts: msg.actions.map(a => ({
-            functionResponse: {
-              name: a.name,
-              response: a.result || { success: true },
-            },
-          })),
-        })
-        // Turn 3 : réponse textuelle du modèle (si présente)
-        if (msg.content) {
-          formattedHistory.push({ role: 'model', parts: [{ text: msg.content }] })
-        }
-      } else if (msg.content) {
-        formattedHistory.push({ role: 'model', parts: [{ text: msg.content }] })
+        const actionSummary = msg.actions
+          .map(a => `[Action: ${a.name}(${JSON.stringify(a.args || {})}) → ${a.result?.success ? 'OK' : 'failed'}]`)
+          .join(' ')
+        parts.push(actionSummary)
+      }
+      if (msg.content) {
+        parts.push(msg.content)
+      }
+      if (parts.length > 0) {
+        formattedHistory.push({ role: 'model', parts: [{ text: parts.join('\n') }] })
       }
     } else {
       // Message utilisateur
@@ -342,6 +330,18 @@ export default async function handler(req, res) {
   while (formattedHistory.length > 0 && formattedHistory[0].role !== 'user') {
     formattedHistory.shift()
   }
+  // Fusionner les tours consécutifs du même rôle (peut arriver si des messages sont filtrés)
+  const mergedHistory = []
+  for (const turn of formattedHistory) {
+    const last = mergedHistory[mergedHistory.length - 1]
+    if (last && last.role === turn.role) {
+      last.parts.push(...turn.parts)
+    } else {
+      mergedHistory.push({ ...turn, parts: [...turn.parts] })
+    }
+  }
+  formattedHistory.length = 0
+  formattedHistory.push(...mergedHistory)
 
   const generationConfig = { maxOutputTokens: MAX_OUTPUT_TOKENS, temperature: TEMPERATURE }
 
@@ -391,8 +391,11 @@ export default async function handler(req, res) {
       debug,
     })
   } catch (error) {
-    console.error('Miam orchestrator error:', error)
-    return res.status(500).json({ error: 'Orchestrator failed' })
+    console.error('Miam orchestrator error:', error?.message, error?.stack)
+    return res.status(500).json({
+      error: 'Orchestrator failed',
+      detail: error?.message || String(error),
+    })
   }
 }
 

@@ -71,7 +71,7 @@ export default function ScanReviewModal({ items: initialItems, receiptTotal, onC
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/40" onClick={onClose}>
       <div
         className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}

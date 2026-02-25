@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
+import { useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -34,6 +36,7 @@ export default function InventoryPage() {
   const { profile } = useAuth()
   const { t } = useLanguage()
   const { registerContextProvider } = useMiam()
+  const location = useLocation()
   const [items, setItems] = useState([])
   const [category, setCategory] = useState('all')
   const [showAddModal, setShowAddModal] = useState(false)
@@ -65,6 +68,20 @@ export default function InventoryPage() {
       description: 'Filter inventory by category',
     },
   })
+
+  // Auto-trigger scanner when navigated from Miam with openScanner state
+  useEffect(() => {
+    if (location.state?.openScanner) {
+      const { source, mode } = location.state.openScanner
+      // Small delay to let ScanReceiptButton register its trigger
+      const timer = setTimeout(() => {
+        scanTriggerRef.current?.({ source, mode })
+      }, 300)
+      // Clear the state to avoid re-triggering on re-render
+      window.history.replaceState({}, '')
+      return () => clearTimeout(timer)
+    }
+  }, [location.state])
 
   // Fournir le contexte inventaire à Miam (liste d'articles pour updateInventoryItem/consumeInventoryItem)
   useEffect(() => {
@@ -178,6 +195,7 @@ export default function InventoryPage() {
   }
 
   const handleScanComplete = (scannedItems, scanReceiptTotal) => {
+    console.log('[InventoryPage] scanComplete:', scannedItems?.length, 'items')
     setScanResults(scannedItems)
     setReceiptTotal(scanReceiptTotal ?? null)
   }
@@ -346,20 +364,22 @@ export default function InventoryPage() {
         />
       )}
 
-      {scanResults && (
+      {scanResults && createPortal(
         <ScanReviewModal
           items={scanResults}
           receiptTotal={receiptTotal}
           onClose={() => { setScanResults(null); setReceiptTotal(null) }}
           onConfirm={handleScanConfirm}
-        />
+        />,
+        document.body
       )}
 
-      {toastMessage && (
-        <div className="fixed bottom-20 left-4 right-4 md:left-auto md:right-4 md:w-96 z-50 bg-red-600 text-white px-4 py-3 rounded-xl shadow-lg text-sm flex items-center justify-between">
+      {toastMessage && createPortal(
+        <div className="fixed bottom-20 left-4 right-4 md:left-auto md:right-4 md:w-96 z-[70] bg-red-600 text-white px-4 py-3 rounded-xl shadow-lg text-sm flex items-center justify-between">
           <span>{toastMessage}</span>
           <button onClick={() => setToastMessage(null)} className="ml-2 text-white/80 hover:text-white cursor-pointer">✕</button>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
