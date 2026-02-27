@@ -60,6 +60,10 @@ export const translations = {
     'login.forgotPassword': 'Mot de passe oublie ?',
     'login.invalidCredentials': 'E-mail ou mot de passe incorrect.',
     'login.emailInUse': 'Cet e-mail est deja utilise.',
+    'login.emailNotConfirmed': 'Veuillez confirmer votre e-mail avant de vous connecter.',
+    'login.connectionStuck': 'La connexion au serveur est bloquee. Essayez de vider le cache ci-dessous, ou verifiez que votre navigateur ne bloque pas les requetes.',
+    'login.clearCacheAndRetry': 'Vider le cache et recharger',
+    'login.signOutAndRetry': 'Se deconnecter et reessayer',
     'login.passwordTooShort': 'Le mot de passe doit contenir au moins 6 caracteres.',
     'login.passwordMismatch': 'Les mots de passe ne correspondent pas.',
     'login.loading': 'Chargement...',
@@ -215,6 +219,15 @@ export const translations = {
     // Common
     'common.loading': 'Chargement...',
 
+    // Offline
+    'offline.banner': 'Mode hors ligne — certaines fonctions sont limitees',
+    'offline.slowConnection': 'Connexion lente, veuillez patienter...',
+    'offline.noInternet': 'Pas de connexion internet',
+    'offline.profileLoadFailed': 'Impossible de charger votre profil',
+    'offline.checkConnection': 'Verifiez votre connexion internet et reessayez.',
+    'offline.retry': 'Reessayer',
+    'offline.networkError': 'Erreur reseau. Verifiez votre connexion.',
+
     // Miam Orchestrator
     'miam.fab.tooltip': 'Parler a Miam',
     'miam.sheet.title': 'Miam',
@@ -298,6 +311,10 @@ export const translations = {
     'login.forgotPassword': 'Forgot password?',
     'login.invalidCredentials': 'Incorrect email or password.',
     'login.emailInUse': 'This email is already in use.',
+    'login.emailNotConfirmed': 'Please confirm your email before signing in.',
+    'login.connectionStuck': 'Connection to server is stuck. Try clearing the cache below, or check that your browser is not blocking requests.',
+    'login.clearCacheAndRetry': 'Clear cache and reload',
+    'login.signOutAndRetry': 'Sign out and retry',
     'login.passwordTooShort': 'Password must be at least 6 characters.',
     'login.passwordMismatch': 'Passwords do not match.',
     'login.loading': 'Loading...',
@@ -453,6 +470,15 @@ export const translations = {
     // Common
     'common.loading': 'Loading...',
 
+    // Offline
+    'offline.banner': 'Offline mode — some features are limited',
+    'offline.slowConnection': 'Slow connection, please wait...',
+    'offline.noInternet': 'No internet connection',
+    'offline.profileLoadFailed': 'Unable to load your profile',
+    'offline.checkConnection': 'Check your internet connection and try again.',
+    'offline.retry': 'Retry',
+    'offline.networkError': 'Network error. Check your connection.',
+
     // Miam Orchestrator
     'miam.fab.tooltip': 'Talk to Miam',
     'miam.sheet.title': 'Miam',
@@ -536,6 +562,10 @@ export const translations = {
     'login.forgotPassword': '\u5fd8\u8bb0\u5bc6\u7801\uff1f',
     'login.invalidCredentials': '\u90ae\u7bb1\u6216\u5bc6\u7801\u4e0d\u6b63\u786e\u3002',
     'login.emailInUse': '\u8be5\u90ae\u7bb1\u5df2\u88ab\u4f7f\u7528\u3002',
+    'login.emailNotConfirmed': '\u8bf7\u5148\u786e\u8ba4\u90ae\u7bb1\u540e\u518d\u767b\u5f55\u3002',
+    'login.connectionStuck': '\u4e0e\u670d\u52a1\u5668\u7684\u8fde\u63a5\u88ab\u963b\u6b62\u3002\u8bf7\u5c1d\u8bd5\u6e05\u9664\u7f13\u5b58\uff0c\u6216\u68c0\u67e5\u6d4f\u89c8\u5668\u8bbe\u7f6e\u3002',
+    'login.clearCacheAndRetry': '\u6e05\u9664\u7f13\u5b58\u5e76\u91cd\u65b0\u52a0\u8f7d',
+    'login.signOutAndRetry': '\u767b\u51fa\u5e76\u91cd\u8bd5',
     'login.passwordTooShort': '\u5bc6\u7801\u81f3\u5c116\u4e2a\u5b57\u7b26\u3002',
     'login.passwordMismatch': '\u4e24\u6b21\u5bc6\u7801\u4e0d\u4e00\u81f4\u3002',
     'login.loading': '\u52a0\u8f7d\u4e2d...',
@@ -690,6 +720,15 @@ export const translations = {
 
     // Common
     'common.loading': '\u52a0\u8f7d\u4e2d...',
+
+    // Offline
+    'offline.banner': '\u79bb\u7ebf\u6a21\u5f0f — \u90e8\u5206\u529f\u80fd\u53d7\u9650',
+    'offline.slowConnection': '\u8fde\u63a5\u7f13\u6162\uff0c\u8bf7\u7a0d\u5019...',
+    'offline.noInternet': '\u65e0\u7f51\u7edc\u8fde\u63a5',
+    'offline.profileLoadFailed': '\u65e0\u6cd5\u52a0\u8f7d\u60a8\u7684\u4e2a\u4eba\u8d44\u6599',
+    'offline.checkConnection': '\u8bf7\u68c0\u67e5\u7f51\u7edc\u8fde\u63a5\u5e76\u91cd\u8bd5\u3002',
+    'offline.retry': '\u91cd\u8bd5',
+    'offline.networkError': '\u7f51\u7edc\u9519\u8bef\u3002\u8bf7\u68c0\u67e5\u8fde\u63a5\u3002',
 
     // Miam Orchestrator
     'miam.fab.tooltip': '\u548cMiam\u804a\u5929',
