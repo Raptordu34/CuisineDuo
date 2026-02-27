@@ -1,17 +1,16 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useLanguage } from '../../contexts/LanguageContext'
-import { apiPost } from '../../lib/apiClient'
+import { useMiam } from '../../contexts/MiamContext'
 import ScanReviewItemRow from './ScanReviewItemRow'
 import DictationButton from '../DictationButton'
 import DictationTrace from '../DictationTrace'
 
 export default function ScanReviewModal({ items: initialItems, receiptTotal, onClose, onConfirm }) {
-  const { t, lang } = useLanguage()
+  const { t } = useLanguage()
+  const { registerContextProvider, registerActions } = useMiam()
   const [items, setItems] = useState(initialItems)
   const [checked, setChecked] = useState(() => initialItems.map(() => true))
   const [saving, setSaving] = useState(false)
-  const [dictationCorrecting, setDictationCorrecting] = useState(false)
-  const [dictationTrace, setDictationTrace] = useState(null)
 
   const selectedCount = checked.filter(Boolean).length
 
@@ -38,29 +37,54 @@ export default function ScanReviewModal({ items: initialItems, receiptTotal, onC
     setItems((prev) => prev.map((item, i) => (i === index ? newItem : item)))
   }
 
-  const handleDictationResult = useCallback(async (text, dictLang) => {
-    if (!text.trim()) return
-    setDictationCorrecting(true)
-    try {
-      const res = await apiPost('/api/correct-transcription', { text, context: 'scan-correction', lang: dictLang || lang, items })
-      if (res.ok) {
-        const data = await res.json()
-        if (data.items && Array.isArray(data.items)) {
-          setItems(data.items)
-          setChecked(data.items.map(() => true))
-        }
-        setDictationTrace({
-          rawTranscript: text,
-          correctedResult: data.changes || t('dictation.scanCorrectionApplied'),
-          timestamp: Date.now(),
-        })
-      }
-    } catch {
-      // silently fail, keep current items
-    } finally {
-      setDictationCorrecting(false)
+  // Enregistrer contexte et actions pour Miam
+  useEffect(() => {
+    const unregisterContext = registerContextProvider('scanReviewItems', () => ({
+      mode: 'scanReview',
+      items: items.map((item, i) => ({
+        index: i,
+        name: item.name,
+        brand: item.brand,
+        quantity: item.quantity,
+        unit: item.unit,
+        price: item.price,
+        price_per_kg: item.price_per_kg,
+        category: item.category,
+        checked: checked[i],
+      })),
+    }))
+
+    const unregisterActions = registerActions({
+      updateScanItem: {
+        handler: ({ index, fields }) => {
+          setItems(prev => prev.map((item, i) => i === index ? { ...item, ...fields } : item))
+          return { success: true }
+        },
+        description: 'Update a scanned item by index',
+      },
+      removeScanItem: {
+        handler: ({ index }) => {
+          setItems(prev => prev.filter((_, i) => i !== index))
+          setChecked(prev => prev.filter((_, i) => i !== index))
+          return { success: true }
+        },
+        description: 'Remove a scanned item by index',
+      },
+      addScanItem: {
+        handler: ({ item }) => {
+          setItems(prev => [...prev, item])
+          setChecked(prev => [...prev, true])
+          return { success: true }
+        },
+        description: 'Add a new item to the scan list',
+      },
+    })
+
+    return () => {
+      unregisterContext()
+      unregisterActions()
     }
-  }, [lang, items, t])
+  }, [registerContextProvider, registerActions, items, checked])
 
   const handleConfirm = async () => {
     if (saving || selectedCount === 0) return
@@ -90,13 +114,6 @@ export default function ScanReviewModal({ items: initialItems, receiptTotal, onC
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer text-xl">&times;</button>
         </div>
-
-        {/* Dictation trace */}
-        {dictationTrace && (
-          <div className="px-4 pt-2 shrink-0">
-            <DictationTrace trace={dictationTrace} />
-          </div>
-        )}
 
         {/* Stats header */}
         <div className="px-4 py-3 border-b border-gray-100 shrink-0 space-y-1">

@@ -149,6 +149,46 @@ const ALL_TOOL_DECLARATIONS = [
       required: ['name'],
     },
   },
+  {
+    name: 'updateScanItem',
+    description: 'Update fields of a scanned item in the scan review list by its index. Use when user wants to change the name, price, quantity, category, etc. of a scanned item.',
+    parameters: {
+      type: 'object',
+      properties: {
+        index: { type: 'number', description: 'Zero-based index of the item in the scan list' },
+        fields: {
+          type: 'object',
+          description: 'Fields to update. Allowed keys: name, brand, quantity, unit, price, price_per_kg, category, store',
+        },
+      },
+      required: ['index', 'fields'],
+    },
+  },
+  {
+    name: 'removeScanItem',
+    description: 'Remove a scanned item from the scan review list by its index. Use when user wants to delete/remove an item from the scan results.',
+    parameters: {
+      type: 'object',
+      properties: {
+        index: { type: 'number', description: 'Zero-based index of the item to remove from the scan list' },
+      },
+      required: ['index'],
+    },
+  },
+  {
+    name: 'addScanItem',
+    description: 'Add a new item to the scan review list. Use when user wants to add a product that was missed by the scan.',
+    parameters: {
+      type: 'object',
+      properties: {
+        item: {
+          type: 'object',
+          description: 'The item to add with fields: name, quantity, unit, category, price (optional), brand (optional), store (optional)',
+        },
+      },
+      required: ['item'],
+    },
+  },
 ]
 
 // Actions toujours disponibles, quel que soit l'onglet actif
@@ -172,6 +212,10 @@ function buildSystemPrompt(lang, currentPage, context, availableActions) {
     ? `- Inventaire (${context.inventoryItems.length} articles): ${context.inventoryItems.slice(0, 20).map(i => `${i.name}${i.brand ? ' (' + i.brand + ')' : ''}`).join(', ')}${context.inventoryItems.length > 20 ? '...' : ''}\n`
     : ''
 
+  const scanReviewSection = context.scanReviewItems?.mode === 'scanReview'
+    ? `\nMODE VERIFICATION SCAN ACTIF — L'utilisateur verifie des articles scannes. Tu peux utiliser updateScanItem, removeScanItem, addScanItem pour modifier la liste.\nArticles scannes:\n${context.scanReviewItems.items.map((item, i) => `  [${i}] ${item.name}${item.brand ? ' (' + item.brand + ')' : ''} — ${item.quantity} ${item.unit}, ${item.price != null ? item.price + ' EUR' : 'prix inconnu'}, cat: ${item.category}${item.checked ? '' : ' (deselectionne)'}`).join('\n')}\n`
+    : ''
+
   const categoryGuide = `
 CORRESPONDANCES CATEGORIE (a utiliser pour les suppositions):
 - Laitier/dairy: yaourt, fromage, lait, beurre, creme, oeuf
@@ -193,7 +237,7 @@ Tu aides ${context.profileName || 'l\'utilisateur'} a gerer son inventaire alime
 
 CONTEXTE ACTUEL:
 - Page active: ${pageName}
-${memberSection}${inventorySection}
+${memberSection}${inventorySection}${scanReviewSection}
 ACTIONS DISPONIBLES:
 ${actionDescriptions}
 
@@ -215,7 +259,7 @@ You help ${context.profileName || 'the user'} manage their food inventory, find 
 
 CURRENT CONTEXT:
 - Active page: ${pageName}
-${memberSection}${inventorySection}
+${memberSection}${inventorySection}${scanReviewSection}
 AVAILABLE ACTIONS:
 ${actionDescriptions}
 
@@ -237,7 +281,7 @@ OTHER INSTRUCTIONS:
 
 当前上下文:
 - 活动页面: ${pageName}
-${memberSection}${inventorySection}
+${memberSection}${inventorySection}${scanReviewSection}
 可用操作:
 ${actionDescriptions}
 

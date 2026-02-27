@@ -11,6 +11,8 @@ import EditItemModal from '../components/inventory/EditItemModal'
 import ConsumeModal from '../components/inventory/ConsumeModal'
 import ScanReceiptButton from '../components/inventory/ScanReceiptButton'
 import ScanReviewModal from '../components/inventory/ScanReviewModal'
+import StoreSelectDialog from '../components/inventory/StoreSelectDialog'
+import { apiPost } from '../lib/apiClient'
 
 function toKg(q, u) {
   if (u === 'kg' || u === 'l') return q
@@ -41,6 +43,8 @@ export default function InventoryPage() {
   const [consumingItem, setConsumingItem] = useState(null)
   const [scanResults, setScanResults] = useState(null)
   const [receiptTotal, setReceiptTotal] = useState(null)
+  const [pendingScanData, setPendingScanData] = useState(null)
+  const [verifyingPrices, setVerifyingPrices] = useState(false)
 
   // Phase 4: Selection mode
   const [selectionMode, setSelectionMode] = useState(false)
@@ -178,8 +182,50 @@ export default function InventoryPage() {
   }
 
   const handleScanComplete = (scannedItems, scanReceiptTotal) => {
+    console.log('[InventoryPage] scanComplete:', scannedItems?.length, 'items')
+    setPendingScanData({ items: scannedItems, receiptTotal: scanReceiptTotal ?? null })
+  }
+
+  const handleStoreConfirm = async (storeName) => {
+    if (!pendingScanData) return
+    const { items: scannedItems, receiptTotal: scanReceiptTotal } = pendingScanData
+    setPendingScanData(null)
+
+    // Appliquer le magasin a tous les items
+    let finalItems = storeName
+      ? scannedItems.map(item => ({ ...item, store: storeName }))
+      : scannedItems
+
+    // Verifier les prix si un magasin est specifie et qu'il y a des items au poids
+    const hasWeightItems = finalItems.some(item =>
+      item.unit === 'kg' && ['meat', 'fish', 'vegetables', 'fruits', 'dairy'].includes(item.category)
+    )
+
+    if (storeName && hasWeightItems) {
+      setVerifyingPrices(true)
+      try {
+        const res = await apiPost('/api/verify-prices', { items: finalItems, store: storeName })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.items) finalItems = data.items
+        }
+      } catch {
+        // Fallback gracieux : on garde les items originaux
+      } finally {
+        setVerifyingPrices(false)
+      }
+    }
+
+    setScanResults(finalItems)
+    setReceiptTotal(scanReceiptTotal)
+  }
+
+  const handleStoreSkip = () => {
+    if (!pendingScanData) return
+    const { items: scannedItems, receiptTotal: scanReceiptTotal } = pendingScanData
+    setPendingScanData(null)
     setScanResults(scannedItems)
-    setReceiptTotal(scanReceiptTotal ?? null)
+    setReceiptTotal(scanReceiptTotal)
   }
 
   // Phase 1: Splitting at scan
@@ -344,6 +390,42 @@ export default function InventoryPage() {
           onUpdateFillLevel={handleUpdateFillLevel}
           onConsumeAll={handleConsumeAll}
         />
+      )}
+
+      {pendingScanData && createPortal(
+        <StoreSelectDialog
+          onConfirm={handleStoreConfirm}
+          onSkip={handleStoreSkip}
+        />,
+        document.body
+      )}
+
+      {verifyingPrices && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl p-6 flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-gray-700 font-medium">{t('inventory.verifyingPrices')}</p>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {pendingScanData && createPortal(
+        <StoreSelectDialog
+          onConfirm={handleStoreConfirm}
+          onSkip={handleStoreSkip}
+        />,
+        document.body
+      )}
+
+      {verifyingPrices && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl p-6 flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-gray-700 font-medium">{t('inventory.verifyingPrices')}</p>
+          </div>
+        </div>,
+        document.body
       )}
 
       {scanResults && (

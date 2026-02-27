@@ -3,6 +3,7 @@ import { useLanguage } from '../../contexts/LanguageContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { apiPost } from '../../lib/apiClient'
 import { logAI } from '../../lib/aiLogger'
+import InAppCamera from './InAppCamera'
 
 function compressImage(file, maxWidth = 800, quality = 0.6) {
   return new Promise((resolve, reject) => {
@@ -36,12 +37,12 @@ function compressImage(file, maxWidth = 800, quality = 0.6) {
 export default function ScanReceiptButton({ onScanComplete, onError, disabled, scanTriggerRef }) {
   const { t, lang } = useLanguage()
   const { profile } = useAuth()
-  const cameraRef = useRef(null)
   const galleryRef = useRef(null)
   const dropdownRef = useRef(null)
   const [scanning, setScanning] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
   const [selectedMode, setSelectedMode] = useState(null)
+  const [showCamera, setShowCamera] = useState(false)
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -63,7 +64,7 @@ export default function ScanReceiptButton({ onScanComplete, onError, disabled, s
         if (source === 'gallery') {
           galleryRef.current?.click()
         } else {
-          cameraRef.current?.click()
+          setShowCamera(true)
         }
       }
     }
@@ -73,10 +74,15 @@ export default function ScanReceiptButton({ onScanComplete, onError, disabled, s
     setSelectedMode(mode)
     setShowDropdown(false)
     if (source === 'camera') {
-      cameraRef.current?.click()
+      setShowCamera(true)
     } else {
       galleryRef.current?.click()
     }
+  }
+
+  const handleCameraCapture = (file) => {
+    setShowCamera(false)
+    handleFile({ target: { files: [file] } })
   }
 
   const handleFile = async (e) => {
@@ -89,7 +95,7 @@ export default function ScanReceiptButton({ onScanComplete, onError, disabled, s
     try {
       const { base64, mimeType } = await compressImage(file)
 
-      const res = await apiPost('/api/scan-receipt', { image: base64, mimeType, lang, mode })
+      const res = await apiPost('/api/scan-receipt', { image: base64, mimeType, lang, mode }, { timeoutMs: 60000 })
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
@@ -132,7 +138,6 @@ export default function ScanReceiptButton({ onScanComplete, onError, disabled, s
     } finally {
       setScanning(false)
       setSelectedMode(null)
-      if (cameraRef.current) cameraRef.current.value = ''
       if (galleryRef.current) galleryRef.current.value = ''
     }
   }
@@ -154,15 +159,13 @@ export default function ScanReceiptButton({ onScanComplete, onError, disabled, s
 
   return (
     <div className="relative" ref={dropdownRef}>
-      {/* Camera input (with capture) */}
-      <input
-        ref={cameraRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={handleFile}
-        className="hidden"
-      />
+      {/* In-app camera */}
+      {showCamera && (
+        <InAppCamera
+          onCapture={handleCameraCapture}
+          onClose={() => setShowCamera(false)}
+        />
+      )}
       {/* Gallery input (without capture) */}
       <input
         ref={galleryRef}
