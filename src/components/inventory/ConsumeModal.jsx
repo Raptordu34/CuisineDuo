@@ -3,7 +3,7 @@ import { useLanguage } from '../../contexts/LanguageContext'
 import FillLevelPicker from '../FillLevelPicker'
 
 export default function ConsumeModal({ item, onClose, onUpdateFillLevel, onConsumeAll }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const [newLevel, setNewLevel] = useState(item.fill_level ?? 1)
   const [saving, setSaving] = useState(false)
 
@@ -36,7 +36,7 @@ export default function ConsumeModal({ item, onClose, onUpdateFillLevel, onConsu
 
         <div className="p-4 space-y-4">
           <div className="text-center">
-            <p className="font-medium text-gray-900">{item.name}</p>
+            <p className="font-medium text-gray-900">{item.name_translations?.[lang] || item.name}</p>
             <p className="text-sm text-gray-500">
               {item.quantity} {item.unit ? t(`unit.${item.unit}`) : ''}
             </p>

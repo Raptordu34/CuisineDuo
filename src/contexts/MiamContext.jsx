@@ -213,6 +213,7 @@ export function MiamProvider({ children }) {
         household_id: profile.household_id,
         added_by: profile.id,
         name: args.name,
+        name_translations: args.name_translations || null,
         quantity: args.quantity ?? 1,
         unit: args.unit ?? 'piece',
         category: args.category ?? 'other',
@@ -258,6 +259,7 @@ export function MiamProvider({ children }) {
       await supabase.from('consumed_items').insert({
         household_id: item.household_id,
         name: item.name,
+        name_translations: item.name_translations || null,
         brand: item.brand || null,
         quantity: item.quantity,
         unit: item.unit,

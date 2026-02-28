@@ -6,7 +6,7 @@ export default function InventoryItemCard({
   item, onEdit, onConsume,
   selectionMode, selected, onLongPress, onToggleSelect,
 }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const longPressTimer = useRef(null)
   const didLongPress = useRef(false)
   const pointerStart = useRef(null)
@@ -101,7 +101,7 @@ export default function InventoryItemCard({
           )}
           <h3 className="font-medium text-gray-900 truncate">
             {item.brand && <span className="text-gray-400 font-normal">{item.brand} </span>}
-            {item.name}
+            {item.name_translations?.[lang] || item.name}
           </h3>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
             <FillLevelIndicator value={fillLevel} size="sm" />

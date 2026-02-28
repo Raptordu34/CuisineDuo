@@ -116,7 +116,7 @@ export default function HomePage() {
           title={t('home.scanReceipt')}
           description={t('home.scanReceiptDesc')}
           color="orange"
-          onClick={() => navigate('/inventory')}
+          onClick={() => navigate('/inventory?action=scan')}
         />
         <DashboardCard
           icon="📦"

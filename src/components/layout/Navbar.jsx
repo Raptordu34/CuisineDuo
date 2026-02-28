@@ -73,26 +73,50 @@ export default function Navbar() {
 
       {/* Mobile bottom tab bar */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-        <div className="h-16 pb-[env(safe-area-inset-bottom)] flex justify-around items-center">
-          {navItems.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${
-                isActive(item.to) ? 'text-orange-500' : 'text-gray-400'
-              }`}
-            >
-              <span className="relative">
-                <item.Icon />
-                {item.to === '/chat' && badge && (
-                  <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 leading-none">
-                    {badge}
-                  </span>
-                )}
-              </span>
-              <span className="text-[10px] font-medium">{item.label}</span>
-            </Link>
-          ))}
+        <div className="h-16 pb-[env(safe-area-inset-bottom)] grid grid-cols-[1fr_4rem_1fr] items-center">
+          {/* Left group: Home + Inventory */}
+          <div className="flex justify-end gap-4 pr-2">
+            {navItems.slice(0, 2).map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={`flex flex-col items-center justify-center gap-0.5 h-full transition-colors ${
+                  isActive(item.to) ? 'text-orange-500' : 'text-gray-400'
+                }`}
+              >
+                <span className="relative">
+                  <item.Icon />
+                </span>
+                <span className="text-[10px] font-medium">{item.label}</span>
+              </Link>
+            ))}
+          </div>
+
+          {/* Center spacer for Miam FAB */}
+          <div />
+
+          {/* Right group: Chat */}
+          <div className="flex justify-start gap-4 pl-2">
+            {navItems.slice(2).map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={`flex flex-col items-center justify-center gap-0.5 h-full transition-colors ${
+                  isActive(item.to) ? 'text-orange-500' : 'text-gray-400'
+                }`}
+              >
+                <span className="relative">
+                  <item.Icon />
+                  {item.to === '/chat' && badge && (
+                    <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 leading-none">
+                      {badge}
+                    </span>
+                  )}
+                </span>
+                <span className="text-[10px] font-medium">{item.label}</span>
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
 

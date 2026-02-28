@@ -98,7 +98,8 @@ const ALL_TOOL_DECLARATIONS = [
     parameters: {
       type: 'object',
       properties: {
-        name:     { type: 'string', description: 'Product name' },
+        name:     { type: 'string', description: 'Product name (in the language of the user)' },
+        name_translations: { type: 'object', description: 'Object containing translations of the product name in French (fr), English (en), and Chinese (zh). Example: {"fr":"Pomme","en":"Apple","zh":"苹果"}' },
         quantity: { type: 'number', description: 'Quantity (default: 1)' },
         unit:     { type: 'string', enum: ['piece', 'kg', 'g', 'l', 'ml', 'pack'], description: 'Unit of measurement' },
         category: {

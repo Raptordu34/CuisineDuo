@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -55,6 +57,7 @@ export default function InventoryPage() {
   const { profile } = useAuth()
   const { t } = useLanguage()
   const { registerContextProvider } = useMiam()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [items, setItems] = useState(() => getCachedInventory(profile?.household_id))
   const [category, setCategory] = useState('all')
   const [showAddModal, setShowAddModal] = useState(false)
@@ -95,6 +98,14 @@ export default function InventoryPage() {
       items.map(i => ({ id: i.id, name: i.name, brand: i.brand, category: i.category }))
     )
   }, [registerContextProvider, items])
+
+  // Handle auto-scan action from URL
+  useEffect(() => {
+    if (searchParams.get('action') === 'scan' && scanTriggerRef.current) {
+      scanTriggerRef.current()
+      setSearchParams({}) // clear params so it doesn't trigger again on reload
+    }
+  }, [searchParams, setSearchParams])
 
   useEffect(() => {
     if (!profile?.household_id) return
@@ -185,6 +196,7 @@ export default function InventoryPage() {
     const consumedData = {
       household_id: item.household_id,
       name: item.name,
+      name_translations: item.name_translations || null,
       brand: item.brand || null,
       quantity: item.quantity,
       unit: item.unit,
@@ -266,6 +278,7 @@ export default function InventoryPage() {
             household_id: profile.household_id,
             added_by: profile.id,
             name: item.name,
+            name_translations: item.name_translations || null,
             brand: typeof item.brand === 'string' && item.brand.trim() ? item.brand.trim() : null,
             quantity: splitQty,
             unit: item.unit,
@@ -286,6 +299,7 @@ export default function InventoryPage() {
           household_id: profile.household_id,
           added_by: profile.id,
           name: item.name,
+          name_translations: item.name_translations || null,
           brand: typeof item.brand === 'string' && item.brand.trim() ? item.brand.trim() : null,
           quantity: item.quantity,
           unit: item.unit,
@@ -303,7 +317,14 @@ export default function InventoryPage() {
       }
     }
 
-    await supabase.from('inventory_items').insert(rows.map(autoPriceCalc))
+    const finalRows = rows.map(autoPriceCalc);
+    const { error } = await supabase.from('inventory_items').insert(finalRows)
+    
+    if (error) {
+      console.error('[InventoryPage] Erreur lors de l\'insertion du scan :', error);
+      setToastMessage("Erreur d'insertion : " + error.message)
+    }
+
     setScanResults(null)
     setReceiptTotal(null)
   }
@@ -336,7 +357,7 @@ export default function InventoryPage() {
 
 
   return (
-    <div className="fixed top-14 bottom-16 left-0 right-0 z-40 flex flex-col bg-gray-50 md:static md:z-auto md:max-w-5xl md:mx-auto md:-mt-8 md:-mb-8 md:h-[calc(100dvh-4rem)]">
+    <div className="fixed top-[74px] bottom-16 left-0 right-0 z-40 flex flex-col bg-gray-50 md:static md:z-auto md:max-w-5xl md:mx-auto md:-mt-8 md:-mb-8 md:h-[calc(100dvh-4rem)]">
       {/* Header */}
       <div className="shrink-0 px-3 pt-3 pb-2 flex items-center justify-between gap-2 min-w-0">
         <div className="flex items-center gap-1.5 min-w-0 shrink">

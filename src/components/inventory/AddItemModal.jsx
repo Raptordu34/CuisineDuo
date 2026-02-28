@@ -9,7 +9,7 @@ const CATEGORIES = [
 const UNITS = ['piece', 'kg', 'g', 'l', 'ml', 'pack']
 
 export default function AddItemModal({ onClose, onAdd }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const [form, setForm] = useState({
     name: '',
     brand: '',
@@ -32,6 +32,7 @@ export default function AddItemModal({ onClose, onAdd }) {
     await onAdd({
       ...form,
       name: form.name.trim(),
+      name_translations: { [lang]: form.name.trim() },
       brand: form.brand.trim() || null,
       quantity: parseFloat(form.quantity) || 1,
       price: form.price ? parseFloat(form.price) : null,

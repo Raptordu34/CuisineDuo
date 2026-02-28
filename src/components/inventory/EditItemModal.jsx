@@ -10,9 +10,9 @@ const CATEGORIES = [
 const UNITS = ['piece', 'kg', 'g', 'l', 'ml', 'pack']
 
 export default function EditItemModal({ item, onClose, onSave, onDelete }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const [form, setForm] = useState({
-    name: item.name,
+    name: item.name_translations?.[lang] || item.name,
     brand: item.brand || '',
     quantity: item.quantity,
     unit: item.unit || 'piece',
@@ -31,8 +31,16 @@ export default function EditItemModal({ item, onClose, onSave, onDelete }) {
     e.preventDefault()
     if (!form.name.trim() || saving) return
     setSaving(true)
+    
+    // Si on a des traductions, on les met à jour pour la langue courante
+    let newTranslations = item.name_translations || {}
+    if (form.name.trim() !== (item.name_translations?.[lang] || item.name)) {
+      newTranslations = { ...newTranslations, [lang]: form.name.trim() }
+    }
+
     await onSave(item.id, {
-      name: form.name.trim(),
+      name: item.name, // on garde le nom original comme fallback
+      name_translations: Object.keys(newTranslations).length > 0 ? newTranslations : null,
       brand: form.brand.trim() || null,
       quantity: parseFloat(form.quantity) || 1,
       unit: form.unit,

@@ -88,6 +88,12 @@ export default function MiamFAB() {
 
   return (
     <>
+      {/* Mobile notch dock behind FAB */}
+      <div
+        className="md:hidden fixed bottom-[1.75rem] left-1/2 -translate-x-1/2 z-50 w-[4.25rem] h-[4.25rem] rounded-full bg-white"
+        style={{ boxShadow: '0 -1px 0 0 #e5e7eb, 0 -4px 6px -2px rgba(0,0,0,0.07)' }}
+      />
+
       <button
         title={t('miam.fab.tooltip')}
         onClick={handleClick}
@@ -96,8 +102,8 @@ export default function MiamFAB() {
         onPointerUp={handlePointerUp}
         onPointerLeave={longPressProps.onPointerLeave}
         onContextMenu={longPressProps.onContextMenu}
-        className={`fixed bottom-20 right-4 md:bottom-8 md:right-8 z-40
-          w-14 h-14 rounded-full
+        className={`fixed bottom-[2.25rem] left-1/2 -translate-x-1/2 md:bottom-8 md:right-8 md:left-auto md:translate-x-0 z-[51]
+          w-[3.25rem] h-[3.25rem] rounded-full
           text-white shadow-lg
           flex items-center justify-center
           transition-all duration-200 ease-out
@@ -112,7 +118,7 @@ export default function MiamFAB() {
 
       {/* Voice transcript bubble */}
       {isVoiceMode && transcript && (
-        <div className="fixed bottom-36 right-4 md:bottom-24 md:right-8 z-40 max-w-[70vw]">
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 md:bottom-24 md:right-8 md:left-auto md:translate-x-0 z-[51] max-w-[70vw]">
           <div className="bg-white rounded-xl shadow-lg px-3 py-2 text-sm text-gray-700 border border-indigo-200">
             {transcript}
           </div>

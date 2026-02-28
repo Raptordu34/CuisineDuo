@@ -10,6 +10,7 @@ function cleanItems(rawItems, mode) {
     .filter(item => item && typeof item.name === 'string' && item.name.trim())
     .map(item => ({
       name: item.name.trim(),
+      name_translations: typeof item.name_translations === 'object' && item.name_translations !== null ? item.name_translations : null,
       brand: typeof item.brand === 'string' && item.brand.trim() ? item.brand.trim() : null,
       quantity: typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1,
       unit: VALID_UNITS.includes(item.unit) ? item.unit : 'piece',
@@ -59,7 +60,8 @@ Return ONLY a valid JSON object with "items" (array) and "receipt_total" (number
 
 function buildPrompt(mode, langInstruction) {
   const commonSchema = `Each item must have:
-- "name": product name (string, clean and human-readable — NOT the raw ticket abbreviation)
+- "name": product name (string, clean and human-readable, in the original language of the image/receipt)
+- "name_translations": an object containing the product name translated into French, English, and Chinese. (object, e.g. {"fr": "Lait demi-écrémé", "en": "Semi-skimmed milk", "zh": "半脱脂牛奶"})
 - "brand": brand name if identifiable (string or null). For store brands, use the full brand name (e.g. "Carrefour Bio", "Marque Repere")
 - "quantity": number purchased (number, default 1). For weighed items, this is the actual weight (e.g. 0.543 for 543g)
 - "unit": unit of measure (string, one of: "piece", "kg", "g", "l", "ml", "pack")
@@ -76,7 +78,7 @@ IMPORTANT for receipts: Many items are sold by weight (fruits, vegetables, meat,
 - The line total (e.g. "3.25 EUR")
 You MUST set: quantity=0.543, unit="kg", price=3.25 (line total), price_per_kg=5.99`
 
-  const itemExample = `{"name":"Semi-skimmed milk","brand":"Carrefour Bio","quantity":1,"unit":"l","price":1.29,"price_per_kg":null,"price_estimated":false,"category":"dairy","estimated_expiry_days":7,"store":"Carrefour"}`
+  const itemExample = `{"name":"Lait demi-écrémé","name_translations":{"fr":"Lait demi-écrémé","en":"Semi-skimmed milk","zh":"半脱脂牛奶"},"brand":"Carrefour Bio","quantity":1,"unit":"l","price":1.29,"price_per_kg":null,"price_estimated":false,"category":"dairy","estimated_expiry_days":7,"store":"Carrefour"}`
 
   if (mode === 'receipt') {
     const example = `{"items":[${itemExample}],"receipt_total":12.50}`

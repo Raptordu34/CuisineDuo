@@ -86,19 +86,51 @@ export default function InAppCamera({ onCapture, onClose }) {
     if (!video) return
 
     const canvas = document.createElement('canvas')
-    // Use the real video stream dimensions for full resolution capture
+    
+    // Pour l'export on garde la pleine résolution de la vidéo
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
     const ctx = canvas.getContext('2d')
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
 
-    // Generate preview data URL and File object
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.95)
-    canvas.toBlob(
+    // Mais pour la preview, on calcule un cropping pour que l'image
+    // corresponde exactement à ce que l'utilisateur voyait (object-cover)
+    const videoRatio = video.videoWidth / video.videoHeight
+    const viewportRatio = video.clientWidth / video.clientHeight
+    
+    let cropWidth = canvas.width
+    let cropHeight = canvas.height
+    let startX = 0
+    let startY = 0
+
+    if (videoRatio > viewportRatio) {
+      // La vidéo est plus large que l'écran (coupée sur les côtés)
+      cropWidth = canvas.height * viewportRatio
+      startX = (canvas.width - cropWidth) / 2
+    } else if (videoRatio < viewportRatio) {
+      // La vidéo est plus haute que l'écran (coupée en haut/bas)
+      cropHeight = canvas.width / viewportRatio
+      startY = (canvas.height - cropHeight) / 2
+    }
+
+    const previewCanvas = document.createElement('canvas')
+    previewCanvas.width = cropWidth
+    previewCanvas.height = cropHeight
+    const previewCtx = previewCanvas.getContext('2d')
+    previewCtx.drawImage(
+      canvas,
+      startX, startY, cropWidth, cropHeight, // Source
+      0, 0, cropWidth, cropHeight           // Destination
+    )
+
+    // On utilise le previewCanvas croppé comme référence pour la photo finale, 
+    // car on veut que l'IA lise *exactement* ce que l'utilisateur a cadré sur son écran.
+    const finalDataUrl = previewCanvas.toDataURL('image/jpeg', 0.95)
+    previewCanvas.toBlob(
       (blob) => {
         if (blob) {
           const file = new File([blob], 'camera-capture.jpg', { type: 'image/jpeg' })
-          setPreview({ dataUrl, file, width: canvas.width, height: canvas.height })
+          setPreview({ dataUrl: finalDataUrl, file, width: Math.round(cropWidth), height: Math.round(cropHeight) })
         }
       },
       'image/jpeg',
@@ -128,24 +160,42 @@ export default function InAppCamera({ onCapture, onClose }) {
         </svg>
       </button>
 
+        {/* Live video preview */}
+        <div className={`flex-1 flex items-center justify-center overflow-hidden ${preview ? 'hidden' : ''}`}>
+          {error ? (
+            <div className="text-white text-center px-6">
+              <p className="text-lg font-medium mb-2">{t('inventory.cameraError')}</p>
+              <p className="text-white/60 text-sm">{error}</p>
+            </div>
+          ) : (
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover"
+            />
+          )}
+        </div>
+
       {preview ? (
         <>
           {/* Photo preview */}
-          <div className="flex-1 flex items-center justify-center overflow-hidden">
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black overflow-hidden">
             <img
               src={preview.dataUrl}
               alt="Captured"
-              className="w-full h-full object-contain"
+              className="w-full h-full object-cover"
             />
           </div>
 
           {/* Resolution info */}
-          <div className="absolute top-4 left-4 bg-black/50 rounded-lg px-3 py-1.5">
+          <div className="absolute top-4 left-4 z-30 bg-black/50 rounded-lg px-3 py-1.5">
             <p className="text-white/80 text-xs">{preview.width} x {preview.height}</p>
           </div>
 
           {/* Confirm / Retake buttons */}
-          <div className="absolute bottom-8 left-0 right-0 flex justify-center gap-8">
+          <div className="absolute bottom-8 left-0 right-0 z-30 flex justify-center gap-8">
             <button
               onClick={handleRetake}
               className="flex flex-col items-center gap-1.5 cursor-pointer"
@@ -173,24 +223,6 @@ export default function InAppCamera({ onCapture, onClose }) {
         </>
       ) : (
         <>
-          {/* Live video preview */}
-          <div className="flex-1 flex items-center justify-center overflow-hidden">
-            {error ? (
-              <div className="text-white text-center px-6">
-                <p className="text-lg font-medium mb-2">{t('inventory.cameraError')}</p>
-                <p className="text-white/60 text-sm">{error}</p>
-              </div>
-            ) : (
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover"
-              />
-            )}
-          </div>
-
           {/* Capture button */}
           {ready && !error && (
             <div className="absolute bottom-8 left-0 right-0 flex justify-center">
