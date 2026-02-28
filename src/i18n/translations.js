@@ -107,6 +107,11 @@ export const translations = {
     'notifications.title': 'Activez les notifications',
     'notifications.description': 'Recevez une alerte quand votre foyer envoie un message.',
     'notifications.enable': 'Activer',
+    'notifications.disable': 'Desactiver',
+    'notifications.relink': 'Votre appareil est autorise mais l\'abonnement est absent du serveur. Reactivez les notifications.',
+    'notifications.denied': 'Notifications bloquees. Autorisez-les dans les parametres du navigateur.',
+    'notifications.deniedHelp': 'Android/Chrome: Parametres du site > Notifications > Autoriser. iPhone/Safari: activez les notifications Safari dans Reglages iOS, puis ouvrez CuisineDuo depuis l\'ecran d\'accueil.',
+    'notifications.iosHint': 'Sur iOS, ajoutez CuisineDuo a l\'ecran d\'accueil pour activer le Web Push.',
 
     // Inventory
     'inventory.title': 'Inventaire',
@@ -495,6 +500,11 @@ export const translations = {
     'notifications.title': 'Enable notifications',
     'notifications.description': 'Get notified when your household sends a message.',
     'notifications.enable': 'Enable',
+    'notifications.disable': 'Disable',
+    'notifications.relink': 'Your device is allowed, but the server subscription is missing. Enable notifications again.',
+    'notifications.denied': 'Notifications are blocked. Please allow them in your browser settings.',
+    'notifications.deniedHelp': 'Android/Chrome: Site settings > Notifications > Allow. iPhone/Safari: enable Safari notifications in iOS settings, then open CuisineDuo from your Home Screen.',
+    'notifications.iosHint': 'On iOS, add CuisineDuo to your Home Screen to enable Web Push.',
 
     // Inventory
     'inventory.title': 'Inventory',
@@ -883,6 +893,11 @@ export const translations = {
     'notifications.title': '\u5f00\u542f\u901a\u77e5',
     'notifications.description': '\u5f53\u5bb6\u5ead\u6210\u5458\u53d1\u9001\u6d88\u606f\u65f6\u63a5\u6536\u63d0\u9192\u3002',
     'notifications.enable': '\u5f00\u542f',
+    'notifications.disable': '\u5173\u95ed',
+    'notifications.relink': '\u8bbe\u5907\u5df2\u5141\u8bb8\u901a\u77e5\uff0c\u4f46\u670d\u52a1\u5668\u7aef\u8ba2\u9605\u4e22\u5931\u3002\u8bf7\u91cd\u65b0\u5f00\u542f\u901a\u77e5\u3002',
+    'notifications.denied': '\u901a\u77e5\u5df2\u88ab\u963b\u6b62\u3002\u8bf7\u5728\u6d4f\u89c8\u5668\u8bbe\u7f6e\u4e2d\u5141\u8bb8\u3002',
+    'notifications.deniedHelp': '\u5b89\u5353/Chrome\uff1a\u7ad9\u70b9\u8bbe\u7f6e > \u901a\u77e5 > \u5141\u8bb8\u3002iPhone/Safari\uff1a\u5728 iOS \u8bbe\u7f6e\u4e2d\u5f00\u542f Safari \u901a\u77e5\uff0c\u7136\u540e\u4ece\u4e3b\u5c4f\u5e55\u6253\u5f00 CuisineDuo\u3002',
+    'notifications.iosHint': '\u5728 iOS \u4e0a\uff0c\u8bf7\u5c06 CuisineDuo \u6dfb\u52a0\u5230\u4e3b\u5c4f\u5e55\u4ee5\u542f\u7528 Web Push\u3002',
 
     // Inventory
     'inventory.title': '\u5e93\u5b58',

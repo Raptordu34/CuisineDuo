@@ -884,7 +884,7 @@ export default function ChatPage() {
                 }
               }}
               placeholder={t('chat.placeholder')}
-              className="flex-1 min-w-0 bg-transparent px-4 py-2.5 text-sm focus:outline-none resize-none leading-normal"
+              className="flex-1 min-w-0 bg-transparent px-4 py-2.5 text-base focus:outline-none resize-none leading-normal"
               style={{ maxHeight: '120px', overflowY: 'auto' }}
             />
             <button

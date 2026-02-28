@@ -18,17 +18,71 @@ export function useNotifications() {
   const supported = 'serviceWorker' in navigator && 'PushManager' in window && !!VAPID_PUBLIC_KEY
   const [permission, setPermission] = useState(() => supported ? Notification.permission : 'default')
   const [subscribed, setSubscribed] = useState(false)
+  const [needsResubscribe, setNeedsResubscribe] = useState(false)
   const [error, setError] = useState(null)
 
-  // Check if already subscribed
-  useEffect(() => {
-    if (!supported) return
-    navigator.serviceWorker.ready.then((reg) => {
-      reg.pushManager.getSubscription().then((sub) => {
-        setSubscribed(!!sub)
-      })
+  const verifySubscriptionInDb = useCallback(async (subscription) => {
+    const response = await apiPost('/api/subscribe-push', {
+      action: 'verify',
+      subscription,
     })
-  }, [supported])
+
+    if (!response.ok) {
+      let message = 'Subscription verification failed'
+      try {
+        const data = await response.json()
+        message = data?.error || message
+      } catch {
+        // ignore parse errors
+      }
+      throw new Error(message)
+    }
+
+    const data = await response.json()
+    return !!data?.subscribed
+  }, [])
+
+  // Check if already subscribed locally and linked in DB
+  useEffect(() => {
+    if (!supported || !profile) return
+
+    let cancelled = false
+
+    const checkSubscription = async () => {
+      try {
+        const reg = await navigator.serviceWorker.ready
+        const sub = await reg.pushManager.getSubscription()
+
+        if (!sub) {
+          if (cancelled) return
+          setSubscribed(false)
+          setNeedsResubscribe(false)
+          return
+        }
+
+        const existsInDb = await verifySubscriptionInDb(sub.toJSON())
+        if (cancelled) return
+
+        setSubscribed(existsInDb)
+        setNeedsResubscribe(!existsInDb)
+        if (!existsInDb) {
+          setError('Subscription missing on server. Please enable notifications again.')
+        }
+      } catch (err) {
+        if (cancelled) return
+        console.error('Push subscription check error:', err)
+        setSubscribed(false)
+        setNeedsResubscribe(false)
+        setError(err.message || 'Subscription verification failed')
+      }
+    }
+
+    checkSubscription()
+
+    return () => {
+      cancelled = true
+    }
+  }, [supported, profile, verifySubscriptionInDb])
 
   const subscribe = useCallback(async () => {
     if (!supported || !profile) return false
@@ -45,11 +99,23 @@ export function useNotifications() {
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
       })
 
-      await apiPost('/api/subscribe-push', {
+      const response = await apiPost('/api/subscribe-push', {
         subscription: sub.toJSON(),
       })
 
+      if (!response.ok) {
+        let message = 'Subscription failed'
+        try {
+          const data = await response.json()
+          message = data?.error || message
+        } catch {
+          // ignore parse errors
+        }
+        throw new Error(message)
+      }
+
       setSubscribed(true)
+      setNeedsResubscribe(false)
       return true
     } catch (err) {
       console.error('Push subscribe error:', err)
@@ -66,17 +132,29 @@ export function useNotifications() {
       const sub = await reg.pushManager.getSubscription()
       if (!sub) return
 
-      await apiDelete('/api/subscribe-push', {
+      const response = await apiDelete('/api/subscribe-push', {
         subscription: sub.toJSON(),
       })
 
+      if (!response.ok) {
+        let message = 'Unsubscription failed'
+        try {
+          const data = await response.json()
+          message = data?.error || message
+        } catch {
+          // ignore parse errors
+        }
+        throw new Error(message)
+      }
+
       await sub.unsubscribe()
       setSubscribed(false)
+      setNeedsResubscribe(false)
     } catch (err) {
       console.error('Push unsubscribe error:', err)
       setError(err.message || 'Unsubscription failed')
     }
   }, [supported, profile])
 
-  return { supported, permission, subscribed, subscribe, unsubscribe, error }
+  return { supported, permission, subscribed, needsResubscribe, subscribe, unsubscribe, error }
 }

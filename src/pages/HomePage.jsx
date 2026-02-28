@@ -29,13 +29,13 @@ export default function HomePage() {
   const { profile } = useAuth()
   const { t } = useLanguage()
   const navigate = useNavigate()
-  const { supported, permission, subscribed, subscribe } = useNotifications()
+  const { supported, permission, subscribed, needsResubscribe, subscribe, unsubscribe, error } = useNotifications()
   const [stats, setStats] = useState(() => getCachedStats(profile?.household_id))
 
   // Miam orchestrator: no page-specific actions (navigate is built-in)
   useMiamActions({})
 
-  const showBanner = supported && permission !== 'denied' && !subscribed
+  const showBanner = supported && !subscribed
 
   useEffect(() => {
     if (!profile?.household_id) return
@@ -89,13 +89,32 @@ export default function HomePage() {
           <div>
             <p className="font-medium text-gray-900">{t('notifications.title')}</p>
             <p className="text-sm text-gray-500">{t('notifications.description')}</p>
+            {needsResubscribe && (
+              <p className="text-sm text-amber-700 mt-1">{t('notifications.relink')}</p>
+            )}
+            {permission === 'denied' && (
+              <p className="text-sm text-red-600 mt-1">{t('notifications.denied')}</p>
+            )}
+            {permission === 'denied' && (
+              <p className="text-xs text-gray-600 mt-1">{t('notifications.deniedHelp')}</p>
+            )}
+            {error && (
+              <p className="text-xs text-red-600 mt-1">{error}</p>
+            )}
+            <p className="text-xs text-gray-500 mt-2">{t('notifications.iosHint')}</p>
           </div>
-          <button
-            onClick={subscribe}
-            className="shrink-0 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-full transition-colors cursor-pointer"
-          >
-            {t('notifications.enable')}
-          </button>
+          {permission !== 'denied' && (
+            <button
+              onClick={subscribed ? unsubscribe : subscribe}
+              className={`shrink-0 px-4 py-2 text-white text-sm font-medium rounded-full transition-colors cursor-pointer ${
+                subscribed
+                  ? 'bg-gray-500 hover:bg-gray-600'
+                  : 'bg-orange-500 hover:bg-orange-600'
+              }`}
+            >
+              {subscribed ? t('notifications.disable') : t('notifications.enable')}
+            </button>
+          )}
         </div>
       )}
 

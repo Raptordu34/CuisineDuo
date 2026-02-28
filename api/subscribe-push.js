@@ -39,22 +39,51 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { subscription } = req.body
+    const { subscription, action } = req.body
     if (!subscription) {
       return res.status(400).json({ error: 'Missing subscription' })
     }
 
-    // Utiliser l'identite verifiee
+    const endpoint = subscription?.endpoint
+    if (!endpoint) {
+      return res.status(400).json({ error: 'Missing subscription endpoint' })
+    }
+
+    if (action === 'verify') {
+      const { data: existing, error: verifyError } = await supabase
+        .from('push_subscriptions')
+        .select('id')
+        .eq('profile_id', user.id)
+        .eq('household_id', profile.household_id)
+        .eq('subscription->>endpoint', endpoint)
+        .limit(1)
+
+      if (verifyError) {
+        console.error('Supabase verify error:', verifyError.message)
+        return res.status(500).json({ error: 'Failed to verify subscription' })
+      }
+
+      return res.status(200).json({ subscribed: (existing?.length || 0) > 0 })
+    }
+
+    const { error: cleanupError } = await supabase
+      .from('push_subscriptions')
+      .delete()
+      .eq('profile_id', user.id)
+      .eq('subscription->>endpoint', endpoint)
+
+    if (cleanupError) {
+      console.error('Supabase cleanup error:', cleanupError.message)
+      return res.status(500).json({ error: 'Failed to save subscription' })
+    }
+
     const { error: insertError } = await supabase
       .from('push_subscriptions')
-      .upsert(
-        {
-          profile_id: user.id,
-          household_id: profile.household_id,
-          subscription,
-        },
-        { onConflict: 'profile_id,subscription->>endpoint' }
-      )
+      .insert({
+        profile_id: user.id,
+        household_id: profile.household_id,
+        subscription,
+      })
 
     if (insertError) {
       console.error('Supabase insert error:', insertError.message)
