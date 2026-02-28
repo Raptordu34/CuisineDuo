@@ -29,13 +29,13 @@ export default function HomePage() {
   const { profile } = useAuth()
   const { t } = useLanguage()
   const navigate = useNavigate()
-  const { supported, permission, subscribed, needsResubscribe, subscribe, unsubscribe, error } = useNotifications()
+  const { supported, permission, subscribed, needsResubscribe, isChecking, subscribe, unsubscribe, error } = useNotifications()
   const [stats, setStats] = useState(() => getCachedStats(profile?.household_id))
 
   // Miam orchestrator: no page-specific actions (navigate is built-in)
   useMiamActions({})
 
-  const showBanner = supported && !subscribed
+  const showBanner = supported && !isChecking && !subscribed
 
   useEffect(() => {
     if (!profile?.household_id) return

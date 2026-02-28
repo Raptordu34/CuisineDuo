@@ -19,6 +19,7 @@ export function useNotifications() {
   const [permission, setPermission] = useState(() => supported ? Notification.permission : 'default')
   const [subscribed, setSubscribed] = useState(false)
   const [needsResubscribe, setNeedsResubscribe] = useState(false)
+  const [isChecking, setIsChecking] = useState(() => !!supported)
   const [error, setError] = useState(null)
 
   const verifySubscriptionInDb = useCallback(async (subscription) => {
@@ -44,7 +45,17 @@ export function useNotifications() {
 
   // Check if already subscribed locally and linked in DB
   useEffect(() => {
-    if (!supported || !profile) return
+    if (!supported) {
+      setIsChecking(false)
+      return
+    }
+
+    if (!profile) {
+      setIsChecking(false)
+      return
+    }
+
+    setIsChecking(true)
 
     let cancelled = false
 
@@ -57,6 +68,7 @@ export function useNotifications() {
           if (cancelled) return
           setSubscribed(false)
           setNeedsResubscribe(false)
+          setIsChecking(false)
           return
         }
 
@@ -68,12 +80,14 @@ export function useNotifications() {
         if (!existsInDb) {
           setError('Subscription missing on server. Please enable notifications again.')
         }
+        setIsChecking(false)
       } catch (err) {
         if (cancelled) return
         console.error('Push subscription check error:', err)
         setSubscribed(false)
         setNeedsResubscribe(false)
         setError(err.message || 'Subscription verification failed')
+        setIsChecking(false)
       }
     }
 
@@ -156,5 +170,5 @@ export function useNotifications() {
     }
   }, [supported, profile])
 
-  return { supported, permission, subscribed, needsResubscribe, subscribe, unsubscribe, error }
+  return { supported, permission, subscribed, needsResubscribe, isChecking, subscribe, unsubscribe, error }
 }

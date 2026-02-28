@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { supabase } from '../lib/supabase'
+﻿import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { supabase, resetAuthLock } from '../lib/supabase'
 import { apiPost } from '../lib/apiClient'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -17,6 +17,16 @@ import { useLongPress } from '../hooks/useLongPress'
 import { logAI } from '../lib/aiLogger'
 
 const MESSAGES_CACHE_KEY = 'cuisineduo_messages'
+
+// Timeout helper : rejette si la promise ne resout pas dans le delai
+function withTimeout(promise, ms = 10000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout apres ${ms}ms`)), ms)
+    ),
+  ])
+}
 
 function getCachedMessages(householdId) {
   try {
@@ -58,6 +68,28 @@ export default function ChatPage() {
   const initialScrollDone = useRef(false)
   const { markAsRead, lastReadAtRef, readStatuses, clearChatNotifications } = useUnreadMessages()
 
+  const fetchMessages = useCallback(async () => {
+    if (!profile?.household_id) return false
+
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*, profiles(display_name)')
+      .eq('household_id', profile.household_id)
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      console.error('[Chat] fetchMessages error:', error)
+      return false
+    }
+
+    if (data) {
+      setMessages(data)
+      setCachedMessages(profile.household_id, data)
+    }
+
+    return true
+  }, [profile?.household_id])
+
   // Miam orchestrator: register available actions
   useMiamActions({
     sendChatMessage: {
@@ -79,7 +111,7 @@ export default function ChatPage() {
     },
   })
 
-  // Fermer les notifications push dès l'arrivée sur la page chat
+  // Fermer les notifications push dÃ¨s l'arrivÃ©e sur la page chat
   useEffect(() => {
     clearChatNotifications()
   }, [clearChatNotifications])
@@ -126,20 +158,10 @@ export default function ChatPage() {
     if (!profile?.household_id) return
 
     let pollingInterval = null
-    let realtimeActive = false
+    let _realtimeActive = false
     let mounted = true
-
-    const fetchMessages = async () => {
-      const { data } = await supabase
-        .from('messages')
-        .select('*, profiles(display_name)')
-        .eq('household_id', profile.household_id)
-        .order('created_at', { ascending: true })
-      if (data) {
-        setMessages(data)
-        setCachedMessages(profile.household_id, data)
-      }
-    }
+    let currentChannel = null
+    let channelSeq = 0
 
     const startPollingFallback = () => {
       if (pollingInterval || !mounted) return
@@ -154,84 +176,118 @@ export default function ChatPage() {
       }
     }
 
-    fetchMessages()
+    const subscribeChannel = () => {
+      // Nettoyer l'ancien channel si existant
+      if (currentChannel) {
+        supabase.removeChannel(currentChannel)
+        currentChannel = null
+      }
 
-    const channel = supabase
-      .channel(`messages:${profile.household_id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `household_id=eq.${profile.household_id}`,
-        },
-        async (payload) => {
-          const { data } = await supabase
-            .from('messages')
-            .select('*, profiles(display_name)')
-            .eq('id', payload.new.id)
-            .single()
-          if (data) {
-            setMessages((prev) => {
-              if (prev.some(m => m.id === data.id)) return prev
-              return [...prev, data].sort((a, b) =>
-                new Date(a.created_at) - new Date(b.created_at)
-              )
-            })
+      _realtimeActive = false
+      channelSeq++
+      const seq = channelSeq
+
+      const channel = supabase
+        .channel(`messages:${profile.household_id}:${seq}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `household_id=eq.${profile.household_id}`,
+          },
+          async (payload) => {
+            try {
+              const { data } = await supabase
+                .from('messages')
+                .select('*, profiles(display_name)')
+                .eq('id', payload.new.id)
+                .single()
+              if (data) {
+                setMessages((prev) => {
+                  if (prev.some(m => m.id === data.id)) return prev
+                  return [...prev, data].sort((a, b) =>
+                    new Date(a.created_at) - new Date(b.created_at)
+                  )
+                })
+              }
+            } catch (err) {
+              console.error('[Chat] Realtime INSERT handler error:', err)
+            }
           }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'messages',
-          filter: `household_id=eq.${profile.household_id}`,
-        },
-        (payload) => {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === payload.new.id
-                ? { ...m, content: payload.new.content, deleted_at: payload.new.deleted_at, edited_at: payload.new.edited_at }
-                : m
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'messages',
+            filter: `household_id=eq.${profile.household_id}`,
+          },
+          (payload) => {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === payload.new.id
+                  ? { ...m, content: payload.new.content, deleted_at: payload.new.deleted_at, edited_at: payload.new.edited_at }
+                  : m
+              )
             )
-          )
-        }
-      )
-      .subscribe((status, err) => {
-        if (status === 'SUBSCRIBED') {
-          realtimeActive = true
-          stopPollingFallback()
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.error('[Chat] Realtime error:', status, err)
-          realtimeActive = false
-          startPollingFallback()
-        } else if (status === 'CLOSED') {
-          realtimeActive = false
-          startPollingFallback()
-        }
-      })
+          }
+        )
+        .subscribe((status, err) => {
+          if (seq !== channelSeq) return // Ignorer les callbacks d'un ancien channel
+          if (status === 'SUBSCRIBED') {
+            console.log('[Chat] Realtime connecte')
+            _realtimeActive = true
+            stopPollingFallback()
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.error('[Chat] Realtime error:', status, err)
+            _realtimeActive = false
+            startPollingFallback()
+          } else if (status === 'CLOSED') {
+            _realtimeActive = false
+            startPollingFallback()
+          }
+        })
 
-    // Re-fetch au retour au premier plan (mobile/PWA)
+      currentChannel = channel
+    }
+
+    fetchMessages()
+    subscribeChannel()
+
+    // Re-fetch et re-subscribe au retour au premier plan (mobile/PWA)
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && mounted) {
+        console.log('[Chat] Retour au premier plan, resync...')
+        // Debloquer le lock auth avant tout appel reseau
+        resetAuthLock()
         fetchMessages()
-        if (!realtimeActive && !pollingInterval) {
-          startPollingFallback()
-        }
+        // Toujours recreer le channel au retour : le WebSocket est souvent mort
+        subscribeChannel()
       }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
+    // Recreer le channel quand le reseau revient
+    const handleOnline = () => {
+      if (!mounted) return
+      console.log('[Chat] Reseau retabli, resync...')
+      resetAuthLock()
+      fetchMessages()
+      subscribeChannel()
+    }
+    window.addEventListener('online', handleOnline)
+
     return () => {
       mounted = false
       stopPollingFallback()
-      supabase.removeChannel(channel)
+      if (currentChannel) supabase.removeChannel(currentChannel)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('online', handleOnline)
     }
-  }, [profile?.household_id])
+  }, [profile?.household_id, fetchMessages])
 
   // Scroll initial : vers le separateur non lu ou vers le bas
   useEffect(() => {
@@ -287,10 +343,16 @@ export default function ChatPage() {
   }, [markAsRead])
 
   // Marquer comme lu aussi quand l'onglet redevient visible et qu'on est en bas
+  // + reset de securite de l'etat sending et du lock auth (requete pendante apres arriere-plan)
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible' && isNearBottom.current) {
-        markAsRead()
+      if (document.visibilityState === 'visible') {
+        // Debloquer le lock auth qui peut etre reste coince par un refresh token
+        // interrompu pendant la mise en arriere-plan
+        resetAuthLock()
+        if (isNearBottom.current) markAsRead()
+        // Filet de securite : debloquer le bouton si une requete est restee pendante
+        setSending(false)
       }
     }
     document.addEventListener('visibilitychange', handleVisibility)
@@ -304,6 +366,7 @@ export default function ChatPage() {
 
     setSending(true)
     setNewMessage('')
+    isNearBottom.current = true
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
 
     // Mode edition : UPDATE au lieu d'INSERT
@@ -314,37 +377,94 @@ export default function ChatPage() {
           m.id === editingMessage.id ? { ...m, content, edited_at: editedAt } : m
         )
       )
-      await supabase
-        .from('messages')
-        .update({ content, edited_at: editedAt })
-        .eq('id', editingMessage.id)
-        .eq('profile_id', profile.id)
-      setEditingMessage(null)
-      setSending(false)
+      try {
+        await withTimeout(
+          supabase
+            .from('messages')
+            .update({ content, edited_at: editedAt })
+            .eq('id', editingMessage.id)
+            .eq('profile_id', profile.id)
+        )
+      } catch (err) {
+        console.error('[Chat] edit message exception:', err)
+        fetchMessages()
+      } finally {
+        setEditingMessage(null)
+        setSending(false)
+      }
       return
     }
 
-    // Capturer le reply avant de le réinitialiser
+    // Capturer le reply avant de le reinitialiser
     const capturedReplyTo = replyTo
     setReplyTo(null)
 
-    await supabase.from('messages').insert({
-      household_id: profile.household_id,
-      profile_id: profile.id,
-      content,
-      reply_to_id: capturedReplyTo?.id || null,
-    })
+    try {
+      const insertMessage = () =>
+        supabase
+          .from('messages')
+          .insert({
+            household_id: profile.household_id,
+            profile_id: profile.id,
+            content,
+            reply_to_id: capturedReplyTo?.id || null,
+          })
+          .select('*')
+          .single()
 
-    // Marquer comme lu apres envoi (on est forcement en bas)
-    markAsRead()
+      let result
+      try {
+        result = await withTimeout(insertMessage(), 10000)
+      } catch (firstErr) {
+        // Premier essai echoue (timeout probable apres retour d'arriere-plan)
+        // Reset du lock auth et retry immediat
+        console.warn('[Chat] Premier essai echoue, retry...', firstErr.message)
+        resetAuthLock()
+        result = await withTimeout(insertMessage(), 10000)
+      }
 
-    // Fire-and-forget push notification
-    apiPost('/api/send-notification', {
-      title: profile.display_name,
-      body: content.length > 100 ? content.slice(0, 100) + '...' : content,
-    }).catch(() => {})
+      const { data, error } = result
 
-    setSending(false)
+      if (error) {
+        console.error('[Chat] send message insert error:', error)
+        setNewMessage(content)
+        setReplyTo(capturedReplyTo || null)
+        fetchMessages()
+        return
+      }
+
+      if (data) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === data.id)) return prev
+          const optimisticMessage = {
+            ...data,
+            profiles: { display_name: profile.display_name },
+          }
+          return [...prev, optimisticMessage].sort((a, b) =>
+            new Date(a.created_at) - new Date(b.created_at)
+          )
+        })
+      }
+
+      fetchMessages()
+
+      // Marquer comme lu apres envoi (on est forcement en bas)
+      markAsRead()
+
+      // Fire-and-forget push notification
+      apiPost('/api/send-notification', {
+        title: profile.display_name,
+        body: content.length > 100 ? content.slice(0, 100) + '...' : content,
+      }).catch(() => {})
+    } catch (err) {
+      console.error('[Chat] send message exception:', err)
+      // Restaurer le texte pour que l'utilisateur puisse reessayer
+      setNewMessage(content)
+      setReplyTo(capturedReplyTo || null)
+      fetchMessages()
+    } finally {
+      setSending(false)
+    }
   }
 
   const handleGifSelect = async (gif) => {
@@ -354,24 +474,66 @@ export default function ChatPage() {
     // Forcer le scroll en bas apres l'envoi du GIF
     isNearBottom.current = true
 
-    await supabase.from('messages').insert({
-      household_id: profile.household_id,
-      profile_id: profile.id,
-      content: '',
-      message_type: 'gif',
-      media_url: gif.url,
-      gif_title: gif.title,
-      giphy_id: gif.id,
-    })
+    try {
+      const insertGif = () =>
+        supabase
+          .from('messages')
+          .insert({
+            household_id: profile.household_id,
+            profile_id: profile.id,
+            content: '',
+            message_type: 'gif',
+            media_url: gif.url,
+            gif_title: gif.title,
+            giphy_id: gif.id,
+          })
+          .select('*')
+          .single()
 
-    markAsRead()
+      let result
+      try {
+        result = await withTimeout(insertGif(), 10000)
+      } catch (firstErr) {
+        console.warn('[Chat] Premier essai GIF echoue, retry...', firstErr.message)
+        resetAuthLock()
+        result = await withTimeout(insertGif(), 10000)
+      }
 
-    apiPost('/api/send-notification', {
-      title: profile.display_name,
-      body: t('chat.sentGif'),
-    }).catch(() => {})
+      const { data, error } = result
 
-    setSending(false)
+      if (error) {
+        console.error('[Chat] send GIF insert error:', error)
+        fetchMessages()
+        return
+      }
+
+      if (data) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === data.id)) return prev
+          const optimisticMessage = {
+            ...data,
+            profiles: { display_name: profile.display_name },
+          }
+          return [...prev, optimisticMessage].sort((a, b) =>
+            new Date(a.created_at) - new Date(b.created_at)
+          )
+        })
+      }
+
+      fetchMessages()
+
+      markAsRead()
+
+      apiPost('/api/send-notification', {
+        title: profile.display_name,
+        body: t('chat.sentGif'),
+      }).catch(() => {})
+    } catch (err) {
+      console.error('[Chat] send GIF exception:', err)
+      fetchMessages()
+    } finally {
+      setSending(false)
+    }
   }
 
   const formatTime = (dateStr) => {
@@ -645,7 +807,7 @@ export default function ChatPage() {
               {isAI ? (
                 <div className="flex items-end gap-2">
                   <div className="w-7 h-7 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xs shrink-0">
-                    🤖
+                    ðŸ¤–
                   </div>
                   <div className="max-w-[75%] flex flex-col items-start">
                     <span className="text-xs text-indigo-500 mb-0.5 ml-1 font-medium">Miam</span>
@@ -830,7 +992,7 @@ export default function ChatPage() {
       )}
 
       <form onSubmit={handleSend} className="shrink-0 border-t border-gray-200 bg-white">
-        {/* Prévisualisation reply ou mode édition */}
+        {/* Previsualisation reply ou mode edition */}
         {(replyTo || editingMessage) && (
           <div className="flex items-start gap-2 px-3 pt-2 pb-1">
             <div className={`flex-1 min-w-0 border-l-2 pl-2 ${editingMessage ? 'border-amber-400' : 'border-orange-400'}`}>
