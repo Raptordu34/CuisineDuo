@@ -400,8 +400,22 @@ export default function ChatPage() {
     setReplyTo(null)
 
     try {
-      const insertMessage = () =>
-        supabase
+      console.log('[Chat Send] 1. Preparation de l\'envoi...')
+      const insertMessage = async () => {
+        console.log('[Chat Send] 2. Verification de la session en cours...')
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession()
+        if (sessionError) {
+          console.error('[Chat Send] Erreur de session:', sessionError)
+        }
+        console.log('[Chat Send] 3. Session recuperee, execution du insert...', {
+          hasSession: Boolean(session),
+          hasAccessToken: Boolean(session?.access_token),
+        })
+
+        return supabase
           .from('messages')
           .insert({
             household_id: profile.household_id,
@@ -411,16 +425,23 @@ export default function ChatPage() {
           })
           .select('*')
           .single()
+      }
 
       let result
       try {
         result = await withTimeout(insertMessage(), 10000)
+        console.log('[Chat Send] 4. Succes du premier essai')
       } catch (firstErr) {
-        // Premier essai echoue (timeout probable apres retour d'arriere-plan)
-        // Reset du lock auth et retry immediat
-        console.warn('[Chat] Premier essai echoue, retry...', firstErr.message)
+        console.warn('[Chat Send] X Premier essai echoue (Timeout/Error):', firstErr.message)
+        console.log('[Chat Send] -> Tentative de reset et retry...')
         resetAuthLock()
+
+        await supabase.auth
+          .refreshSession()
+          .catch((e) => console.warn('Refresh session retry error:', e))
+
         result = await withTimeout(insertMessage(), 10000)
+        console.log('[Chat Send] 5. Succes du second essai')
       }
 
       const { data, error } = result

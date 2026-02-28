@@ -128,7 +128,7 @@ export function AuthProvider({ children }) {
 
     // Ecouter les changements (sign in, sign out, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         if (cancelled) return
         if (!initializedRef.current && event === 'INITIAL_SESSION') return
 
@@ -142,16 +142,19 @@ export function AuthProvider({ children }) {
 
         setUser(session?.user ?? null)
         if (session?.user) {
-          try {
-            const data = await fetchProfile(session.user.id)
-            if (cancelled) return
-            if (data) {
-              setProfile(data)
-              setCachedProfile(data)
+          // CRITIQUE : ne pas awaiting Supabase ici pour éviter deadlock.
+          setTimeout(async () => {
+            try {
+              const data = await fetchProfile(session.user.id)
+              if (cancelled) return
+              if (data) {
+                setProfile(data)
+                setCachedProfile(data)
+              }
+            } catch (err) {
+              console.warn('[Auth] fetchProfile error in onAuthStateChange:', err.message)
             }
-          } catch (err) {
-            console.warn('[Auth] fetchProfile error in onAuthStateChange:', err.message)
-          }
+          }, 0)
         } else {
           setProfile(null)
           setCachedProfile(null)
