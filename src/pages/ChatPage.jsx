@@ -875,8 +875,12 @@ export default function ChatPage() {
               onChange={(e) => setNewMessage(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  handleSend(e)
+                  // Sur mobile (ecran tactile), Enter = retour a la ligne
+                  const isMobile = window.matchMedia?.('(pointer: coarse)')?.matches
+                  if (!isMobile) {
+                    e.preventDefault()
+                    handleSend(e)
+                  }
                 }
               }}
               placeholder={t('chat.placeholder')}

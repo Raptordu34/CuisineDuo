@@ -116,6 +116,8 @@ export default function MiamSheet() {
     messages, sendMessage, clearConversation, isLoading,
     getCurrentPage,
     ttsEnabled, toggleTTS,
+    voiceChatActive, stopVoiceChat, interruptSpeaking,
+    voiceChatPhase, voiceChatTranscript,
   } = useMiam()
   const { t } = useLanguage()
 
@@ -130,23 +132,36 @@ export default function MiamSheet() {
     }
   }, [messages, isLoading])
 
-  // Focus input when sheet opens
+  // Auto-resize textarea when content changes
   useEffect(() => {
-    if (isSheetOpen) {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+  }, [input])
+
+  // Focus input when sheet opens (only if not in voice chat mode)
+  useEffect(() => {
+    if (isSheetOpen && !voiceChatActive) {
       setTimeout(() => inputRef.current?.focus(), 300)
     }
-  }, [isSheetOpen])
+  }, [isSheetOpen, voiceChatActive])
 
   const handleSend = useCallback(() => {
     if (!input.trim() || isLoading) return
     sendMessage(input.trim())
     setInput('')
+    if (inputRef.current) inputRef.current.style.height = 'auto'
   }, [input, isLoading, sendMessage])
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
+      // Sur mobile (ecran tactile), Enter = retour a la ligne
+      const isMobile = window.matchMedia?.('(pointer: coarse)')?.matches
+      if (!isMobile) {
+        e.preventDefault()
+        handleSend()
+      }
     }
   }, [handleSend])
 
@@ -233,7 +248,7 @@ export default function MiamSheet() {
         </div>
 
         {/* Suggestions */}
-        {messages.length === 0 && (
+        {messages.length === 0 && !voiceChatActive && (
           <SuggestionChips
             currentPage={getCurrentPage()}
             onSuggestion={handleSuggestion}
@@ -241,7 +256,78 @@ export default function MiamSheet() {
           />
         )}
 
-        {/* Input */}
+        {/* Voice Chat Panel — remplace l'input quand la conversation vocale est active */}
+        {voiceChatActive ? (
+          <div
+            className="px-4 py-4 border-t border-indigo-100 bg-gradient-to-t from-indigo-50/80 to-white pb-[calc(1rem+env(safe-area-inset-bottom))]"
+            onClick={voiceChatPhase === 'speaking' ? interruptSpeaking : undefined}
+          >
+            <div className="flex flex-col items-center gap-3">
+              {/* Phase : Écoute */}
+              {voiceChatPhase === 'listening' && (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="relative">
+                    <div className="w-16 h-16 rounded-full bg-indigo-500 flex items-center justify-center voice-chat-pulse">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-white">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+                      </svg>
+                    </div>
+                    <div className="absolute inset-0 rounded-full border-2 border-indigo-300 animate-ping opacity-40" />
+                  </div>
+                  <span className="text-sm font-medium text-indigo-600">{t('miam.voiceChat.listening')}</span>
+                  {voiceChatTranscript && (
+                    <p className="text-sm text-gray-600 text-center max-w-[80%] bg-white rounded-lg px-3 py-1.5 shadow-sm border border-indigo-100">
+                      {voiceChatTranscript}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Phase : Réflexion */}
+              {voiceChatPhase === 'processing' && (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-16 h-16 rounded-full bg-indigo-500 flex items-center justify-center">
+                    <div className="flex gap-1">
+                      <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
+                  <span className="text-sm font-medium text-indigo-600">{t('miam.voiceChat.processing')}</span>
+                </div>
+              )}
+
+              {/* Phase : Miam parle */}
+              {voiceChatPhase === 'speaking' && (
+                <div className="flex flex-col items-center gap-2 cursor-pointer">
+                  <div className="relative">
+                    <div className="w-16 h-16 rounded-full bg-indigo-500 flex items-center justify-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-white">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 0 1 0 12.728M16.463 8.288a5.25 5.25 0 0 1 0 7.424M6.75 8.25l4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z" />
+                      </svg>
+                    </div>
+                    <div className="absolute -inset-1 rounded-full border-2 border-indigo-300 animate-ping opacity-30" />
+                    <div className="absolute -inset-3 rounded-full border border-indigo-200 animate-ping opacity-20" style={{ animationDelay: '400ms' }} />
+                  </div>
+                  <span className="text-sm font-medium text-indigo-600">{t('miam.voiceChat.speaking')}</span>
+                  <span className="text-xs text-gray-400">{t('miam.voiceChat.tapToInterrupt')}</span>
+                </div>
+              )}
+
+              {/* Bouton Arrêter */}
+              <button
+                onClick={(e) => { e.stopPropagation(); stopVoiceChat() }}
+                className="mt-1 px-6 py-2 rounded-full bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors flex items-center gap-2 cursor-pointer"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 7.5A2.25 2.25 0 0 1 7.5 5.25h9a2.25 2.25 0 0 1 2.25 2.25v9a2.25 2.25 0 0 1-2.25 2.25h-9a2.25 2.25 0 0 1-2.25-2.25v-9Z" />
+                </svg>
+                {t('miam.voiceChat.stop')}
+              </button>
+            </div>
+          </div>
+        ) : (
+        /* Input texte classique */
         <div className="px-4 py-3 border-t border-gray-100 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
           <div className="flex items-end gap-2">
             <DictationButton
@@ -250,15 +336,16 @@ export default function MiamSheet() {
               color="indigo"
               popoverDirection="up"
             />
-            <input
+            <textarea
               ref={inputRef}
-              type="text"
+              rows={1}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={t('miam.sheet.placeholder')}
               disabled={isLoading}
-              className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 disabled:opacity-50"
+              className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 disabled:opacity-50 resize-none leading-normal"
+              style={{ maxHeight: '120px', overflowY: 'auto' }}
             />
             <button
               onClick={handleSend}
@@ -271,12 +358,20 @@ export default function MiamSheet() {
             </button>
           </div>
         </div>
+        )}
       </div>
 
       <style>{`
         @keyframes slideUp {
           from { transform: translateY(100%); }
           to { transform: translateY(0); }
+        }
+        @keyframes voiceChatPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
+          50% { box-shadow: 0 0 0 12px rgba(99, 102, 241, 0); }
+        }
+        .voice-chat-pulse {
+          animation: voiceChatPulse 2s ease-in-out infinite;
         }
       `}</style>
     </>

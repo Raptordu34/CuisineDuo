@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase'
 import { apiPost } from '../lib/apiClient'
 import { logAI } from '../lib/aiLogger'
 import { useWakeWord } from '../hooks/useWakeWord'
+import { useVoiceChat } from '../hooks/useVoiceChat'
 
 const MiamContext = createContext(null)
 
@@ -54,6 +55,34 @@ export function MiamProvider({ children }) {
 
   // ID du dernier message envoyé par Miam dans le chat du foyer
   const lastSentMessageIdRef = useRef(null)
+
+  // Voice chat mode
+  const [voiceChatActive, setVoiceChatActive] = useState(false)
+  const voiceChatActiveRef = useRef(false)
+  const [isSpeaking, setIsSpeaking] = useState(false)
+  const isSpeakingRef = useRef(false)
+  const sendMessageRef = useRef(null)
+  const voiceChatFnsRef = useRef({})
+
+  // Voice chat utterance handler (utilise sendMessageRef pour éviter la dépendance circulaire)
+  const handleVoiceChatUtterance = useCallback((text) => {
+    sendMessageRef.current?.(text)
+  }, [])
+
+  const voiceChat = useVoiceChat({
+    onUtterance: handleVoiceChatUtterance,
+    lang,
+  })
+
+  // Synchroniser les refs du voice chat
+  useEffect(() => {
+    voiceChatFnsRef.current = {
+      start: voiceChat.start,
+      stop: voiceChat.stop,
+      enterSpeaking: voiceChat.enterSpeaking,
+      resumeListening: voiceChat.resumeListening,
+    }
+  }, [voiceChat.start, voiceChat.stop, voiceChat.enterSpeaking, voiceChat.resumeListening])
 
   // Fetch des membres du foyer + chargement historique depuis localStorage
   useEffect(() => {
@@ -124,9 +153,17 @@ export function MiamProvider({ children }) {
     return Object.keys(actionsRef.current)
   }, [])
 
-  // TTS
+  // TTS — amélioré avec support conversation vocale
   const speak = useCallback((text) => {
-    if (!ttsEnabled || !window.speechSynthesis) return
+    // En mode conversation vocale, toujours parler. Sinon respecter le toggle TTS.
+    const shouldSpeak = voiceChatActiveRef.current || ttsEnabled
+    if (!shouldSpeak || !window.speechSynthesis) {
+      // Si conversation vocale active mais synth indisponible, reprendre l'écoute
+      if (voiceChatActiveRef.current) {
+        voiceChatFnsRef.current.resumeListening?.()
+      }
+      return
+    }
     window.speechSynthesis.cancel()
     const utterance = new SpeechSynthesisUtterance(text)
     const langMap = { fr: 'fr-FR', en: 'en-US', zh: 'zh-CN' }
@@ -136,6 +173,32 @@ export function MiamProvider({ children }) {
     const voices = window.speechSynthesis.getVoices()
     const preferred = voices.find(v => v.lang.startsWith(utterance.lang) && v.localService)
     if (preferred) utterance.voice = preferred
+
+    isSpeakingRef.current = true
+    setIsSpeaking(true)
+
+    // Notifier le voice chat qu'on entre en phase speaking (coupe le micro)
+    if (voiceChatActiveRef.current) {
+      voiceChatFnsRef.current.enterSpeaking?.()
+    }
+
+    utterance.onend = () => {
+      isSpeakingRef.current = false
+      setIsSpeaking(false)
+      // Reprendre l'écoute en conversation vocale après la fin du TTS
+      if (voiceChatActiveRef.current) {
+        voiceChatFnsRef.current.resumeListening?.()
+      }
+    }
+
+    utterance.onerror = () => {
+      isSpeakingRef.current = false
+      setIsSpeaking(false)
+      if (voiceChatActiveRef.current) {
+        voiceChatFnsRef.current.resumeListening?.()
+      }
+    }
+
     window.speechSynthesis.speak(utterance)
   }, [ttsEnabled, lang])
 
@@ -154,6 +217,27 @@ export function MiamProvider({ children }) {
       return next
     })
   }, [])
+
+  // Arrêter le TTS
+  const stopSpeaking = useCallback(() => {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel()
+    }
+    if (isSpeakingRef.current) {
+      isSpeakingRef.current = false
+      setIsSpeaking(false)
+    }
+  }, [])
+
+  // Interrompre le TTS et reprendre l'écoute (barge-in par tap)
+  const interruptSpeaking = useCallback(() => {
+    stopSpeaking()
+    if (voiceChatActiveRef.current) {
+      setTimeout(() => {
+        voiceChatFnsRef.current.resumeListening?.()
+      }, 200)
+    }
+  }, [stopSpeaking])
 
   // Execute action
   const executeAction = useCallback(async (action) => {
@@ -387,8 +471,12 @@ export function MiamProvider({ children }) {
       // TTS
       if (data.response) {
         speak(data.response)
+      } else if (voiceChatActiveRef.current) {
+        // Pas de texte de réponse — reprendre l'écoute directement
+        voiceChatFnsRef.current.resumeListening?.()
       }
     } catch (err) {
+      const errorMsg = t('miam.error')
       logAI({
         householdId: profile?.household_id,
         profileId: profile?.id,
@@ -399,15 +487,54 @@ export function MiamProvider({ children }) {
       })
       setMessages(prev => [...prev, {
         role: 'miam',
-        content: t('miam.error'),
+        content: errorMsg,
       }])
+      // En mode conversation vocale, lire l'erreur (qui reprendra l'écoute via onend)
+      if (voiceChatActiveRef.current) {
+        speak(errorMsg)
+      }
     } finally {
       setIsLoading(false)
     }
   }, [isLoading, lang, getCurrentPage, getAvailableActions, messages, profile, householdMembers, collectContext, executeAction, speak, t])
 
+  // Synchroniser sendMessageRef (doit être après la définition de sendMessage)
+  useEffect(() => {
+    sendMessageRef.current = sendMessage
+  }, [sendMessage])
+
   const openSheet = useCallback(() => setIsSheetOpen(true), [])
-  const closeSheet = useCallback(() => setIsSheetOpen(false), [])
+  const closeSheet = useCallback(() => {
+    setIsSheetOpen(false)
+    // Arrêter la conversation vocale si active
+    if (voiceChatActiveRef.current) {
+      voiceChatActiveRef.current = false
+      setVoiceChatActive(false)
+      setIsVoiceActive(false)
+      voiceChatFnsRef.current.stop?.()
+      stopSpeaking()
+    }
+  }, [stopSpeaking])
+
+  // Démarrer une conversation vocale
+  const startVoiceChat = useCallback(() => {
+    if (!voiceChat.isSupported) return
+    voiceChatActiveRef.current = true
+    setVoiceChatActive(true)
+    setIsVoiceActive(true)
+    setIsSheetOpen(true)
+    voiceChatFnsRef.current.start?.()
+  }, [voiceChat.isSupported])
+
+  // Arrêter la conversation vocale
+  const stopVoiceChat = useCallback(() => {
+    voiceChatActiveRef.current = false
+    setVoiceChatActive(false)
+    setIsVoiceActive(false)
+    voiceChatFnsRef.current.stop?.()
+    stopSpeaking()
+  }, [stopSpeaking])
+
   const clearConversation = useCallback(() => {
     setMessages([])
     if (profile?.household_id) {
@@ -432,6 +559,10 @@ export function MiamProvider({ children }) {
       wakeWordEnabled, toggleWakeWord,
       isVoiceActive, setIsVoiceActive,
       householdMembers,
+      voiceChatActive, startVoiceChat, stopVoiceChat,
+      isSpeaking, stopSpeaking, interruptSpeaking,
+      voiceChatPhase: voiceChat.phase,
+      voiceChatTranscript: voiceChat.transcript,
     }}>
       {children}
     </MiamContext.Provider>

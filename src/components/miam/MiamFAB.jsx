@@ -1,10 +1,7 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useCallback } from 'react'
 import { useMiam } from '../../contexts/MiamContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useLongPress } from '../../hooks/useLongPress'
-import { useDictation } from '../../hooks/useDictation'
-
-// Keep lang fresh via ref to avoid stale closures in useLongPress timeout
 
 function MiamIcon() {
   return (
@@ -14,68 +11,15 @@ function MiamIcon() {
   )
 }
 
-function MicIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
-    </svg>
-  )
-}
-
 export default function MiamFAB() {
-  const { isSheetOpen, openSheet, sendMessage, setIsVoiceActive } = useMiam()
-  const { t, lang } = useLanguage()
-  const { isListening, transcript, startListening, stopListening, isSupported } = useDictation()
-  const [isVoiceMode, setIsVoiceMode] = useState(false)
-  const transcriptRef = useRef('')
-  const langRef = useRef(lang)
-
-  useEffect(() => {
-    langRef.current = lang
-  }, [lang])
-
-  // Use the DictationButton's pattern: track transcript via ref, send on result
-  const handleDictationResult = useCallback((finalTranscript) => {
-    if (finalTranscript.trim()) {
-      setIsVoiceActive(false)
-      setIsVoiceMode(false)
-      openSheet()
-      sendMessage(finalTranscript.trim())
-    } else {
-      setIsVoiceActive(false)
-      setIsVoiceMode(false)
-    }
-  }, [openSheet, sendMessage, setIsVoiceActive])
-
-  // Track transcript for display
-  useEffect(() => {
-    transcriptRef.current = transcript
-  }, [transcript])
+  const { isSheetOpen, openSheet, startVoiceChat } = useMiam()
+  const { t } = useLanguage()
 
   const handleLongPress = useCallback(() => {
-    if (!isSupported) {
-      openSheet()
-      return
-    }
-    setIsVoiceMode(true)
-    setIsVoiceActive(true)
-    transcriptRef.current = ''
-    startListening(langRef.current)
-  }, [isSupported, openSheet, setIsVoiceActive, startListening])
+    startVoiceChat()
+  }, [startVoiceChat])
 
   const longPressProps = useLongPress(handleLongPress, { delay: 400 })
-
-  const handlePointerUp = useCallback(() => {
-    longPressProps.onPointerUp()
-    if (isVoiceMode && isListening) {
-      stopListening()
-      // After stopping, use a small delay for final result
-      setTimeout(() => {
-        const text = transcriptRef.current
-        handleDictationResult(text)
-      }, 300)
-    }
-  }, [longPressProps, isVoiceMode, isListening, stopListening, handleDictationResult])
 
   const handleClick = useCallback((e) => {
     longPressProps.onClick(e)
@@ -99,31 +43,19 @@ export default function MiamFAB() {
         onClick={handleClick}
         onPointerDown={longPressProps.onPointerDown}
         onPointerMove={longPressProps.onPointerMove}
-        onPointerUp={handlePointerUp}
+        onPointerUp={longPressProps.onPointerUp}
         onPointerLeave={longPressProps.onPointerLeave}
         onContextMenu={longPressProps.onContextMenu}
-        className={`fixed bottom-[2.25rem] left-1/2 -translate-x-1/2 md:bottom-8 md:right-8 md:left-auto md:translate-x-0 z-[51]
+        className="fixed bottom-[2.25rem] left-1/2 -translate-x-1/2 md:bottom-8 md:right-8 md:left-auto md:translate-x-0 z-[51]
           w-[3.25rem] h-[3.25rem] rounded-full
+          bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 shadow-indigo-500/30
           text-white shadow-lg
           flex items-center justify-center
           transition-all duration-200 ease-out
-          cursor-pointer touch-none
-          ${isVoiceMode
-            ? 'bg-red-500 shadow-red-500/30 scale-110 animate-pulse'
-            : 'bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 shadow-indigo-500/30'
-          }`}
+          cursor-pointer touch-none"
       >
-        {isVoiceMode ? <MicIcon /> : <MiamIcon />}
+        <MiamIcon />
       </button>
-
-      {/* Voice transcript bubble */}
-      {isVoiceMode && transcript && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 md:bottom-24 md:right-8 md:left-auto md:translate-x-0 z-[51] max-w-[70vw]">
-          <div className="bg-white rounded-xl shadow-lg px-3 py-2 text-sm text-gray-700 border border-indigo-200">
-            {transcript}
-          </div>
-        </div>
-      )}
     </>
   )
 }
