@@ -1,4 +1,12 @@
 {
+  "functions": {
+    "api/generate-recipe-image.js": {
+      "maxDuration": 30
+    },
+    "api/suggest-recipes.js": {
+      "maxDuration": 60
+    }
+  },
   "headers": [
     {
       "source": "/assets/(.*)",

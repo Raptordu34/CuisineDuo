@@ -11,6 +11,8 @@ import OnboardingPage from './pages/OnboardingPage'
 import HomePage from './pages/HomePage'
 import ChatPage from './pages/ChatPage'
 import InventoryPage from './pages/InventoryPage'
+import RecipesPage from './pages/RecipesPage'
+import RecipeDetailPage from './pages/RecipeDetailPage'
 import AILogsPage from './pages/AILogsPage'
 
 function App() {
@@ -40,6 +42,26 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <InventoryPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/recipes"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <RecipesPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/recipes/:id"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <RecipeDetailPage />
                 </Layout>
               </ProtectedRoute>
             }

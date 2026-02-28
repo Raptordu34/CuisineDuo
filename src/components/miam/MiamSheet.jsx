@@ -39,6 +39,14 @@ function ActionChip({ action, t }) {
     updateInventoryItem: t('miam.action.executed', { action: `Mis à jour : ${action.args?.name || ''}` }),
     consumeInventoryItem:  t('miam.action.executed', { action: `Consommé : ${action.args?.name || ''}` }),
     deleteInventoryItem:   t('miam.action.executed', { action: `Supprimé : ${action.args?.name || ''}` }),
+    addRecipe: t('miam.action.addRecipe', { name: action.args?.name || '' }),
+    deleteRecipe: t('miam.action.deleteRecipe', { name: action.args?.name || '' }),
+    rateRecipe: t('miam.action.rateRecipe', { name: action.args?.name || '' }),
+    addRecipeComment: t('miam.action.addRecipeComment', { name: action.args?.name || '' }),
+    updateRecipeStep: t('miam.action.updateRecipeStep', { name: action.args?.name || '' }),
+    addRecipeTip: t('miam.action.addRecipeTip', { name: action.args?.name || '' }),
+    updateRecipeInfo: t('miam.action.updateRecipeInfo', { name: action.args?.name || '' }),
+    suggestRecipes: t('miam.action.suggestRecipes'),
   }
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 text-xs">
@@ -87,6 +95,11 @@ function SuggestionChips({ currentPage, onSuggestion, t }) {
       { key: 'scan', label: t('miam.suggest.scan') },
       { key: 'expiring', label: t('miam.suggest.expiring') },
       { key: 'addItem', label: t('miam.suggest.addItem') },
+    ],
+    recipes: [
+      { key: 'suggestRecipe', label: t('miam.suggest.suggestRecipe') },
+      { key: 'addRecipe', label: t('miam.suggest.addRecipe') },
+      { key: 'whatToCook', label: t('miam.suggest.whatToCook') },
     ],
     chat: [
       { key: 'sendMessage', label: t('miam.suggest.sendMessage') },
