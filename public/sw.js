@@ -68,14 +68,26 @@ self.addEventListener('fetch', (event) => {
             caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
             return response
           }
-          // Si Vercel a retourne du HTML au lieu du JS → asset manquant apres deploiement
-          // On refuse de servir ca et on force le rechargement
+          // Si Vercel a retourne du HTML au lieu du JS → cache HTTP empoisonné ou asset manquant
           if (response.ok && !isValidAssetResponse(response)) {
-            // Notifier les clients qu'il faut recharger
-            self.clients.matchAll().then((clients) => {
-              clients.forEach((client) => client.postMessage({ type: 'RELOAD_NEEDED' }))
-            })
-            return response
+            // Tenter de contourner le cache HTTP du navigateur qui aurait pu garder l'index.html
+            return fetch(new Request(request.url, { cache: 'reload' })).then((bypassResponse) => {
+              if (bypassResponse.ok && isValidAssetResponse(bypassResponse)) {
+                 const clone = bypassResponse.clone()
+                 caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+                 return bypassResponse
+              }
+              // Si meme bypassResponse n'est pas valide, l'asset n'existe vraiment plus (ex: vieux hash apres deploiement)
+              self.clients.matchAll().then((clients) => {
+                clients.forEach((client) => client.postMessage({ type: 'RELOAD_NEEDED' }))
+              })
+              return response
+            }).catch(() => {
+               self.clients.matchAll().then((clients) => {
+                 clients.forEach((client) => client.postMessage({ type: 'RELOAD_NEEDED' }))
+               })
+               return response
+            });
           }
           return response
         }).catch(() => {

@@ -1,10 +1,9 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 
 const PROFILE_CACHE_KEY = 'cuisineduo_cached_profile'
-const SESSION_TIMEOUT_MS = 8000 // 8 secondes max pour le chargement de session
 
 function getCachedProfile() {
   try {
@@ -23,178 +22,155 @@ function setCachedProfile(profile) {
       localStorage.removeItem(PROFILE_CACHE_KEY)
     }
   } catch {
-    // localStorage indisponible — ignorer
+    // localStorage indisponible
   }
 }
 
 export function AuthProvider({ children }) {
+  const cachedProfile = getCachedProfile()
   const [user, setUser] = useState(null)
-  const [profile, setProfile] = useState(null)
+  const [profile, setProfile] = useState(cachedProfile)
   const [loading, setLoading] = useState(true)
-  const [offline, setOffline] = useState(!navigator.onLine)
-  const [profileLoadFailed, setProfileLoadFailed] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const initializedRef = useRef(false)
 
-  const fetchProfile = async (userId) => {
+  const fetchProfile = useCallback(async (userId) => {
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
       .single()
     if (error) {
-      console.error('Failed to fetch profile:', error.message, error.code, error.details)
+      console.error('[Auth] Failed to fetch profile:', error.message)
       return null
     }
     return data
-  }
-
-  // Valide la session cote serveur et retourne le user valide, ou null
-  const validateSession = async () => {
-    try {
-      const { data: { user: validUser }, error } = await supabase.auth.getUser()
-      if (error || !validUser) {
-        console.warn('Session invalide cote serveur:', error?.message)
-        return null
-      }
-      return validUser
-    } catch (err) {
-      console.error('Erreur validation session:', err)
-      return null
-    }
-  }
-
-  useEffect(() => {
-    const handleOnline = () => setOffline(false)
-    const handleOffline = () => setOffline(true)
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
-    return () => {
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
-    }
   }, [])
 
   useEffect(() => {
     let cancelled = false
 
-    // Timeout de securite : si getSession prend trop longtemps, charger depuis le cache
-    const timeoutId = setTimeout(() => {
-      if (cancelled) return
-      const cached = getCachedProfile()
-      if (cached) {
-        console.warn('Auth session timeout — loading from cache')
-        setProfile(cached)
-      }
-      // Pas de cache, pas de session → on laisse passer vers le login
-      setLoading(false)
-    }, SESSION_TIMEOUT_MS)
-
-    // Recuperer la session existante au chargement
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (cancelled) return
-
-      if (session?.user) {
-        // Valider la session cote serveur avec getUser()
-        const validUser = await validateSession()
-        if (cancelled) return
-
-        if (!validUser) {
-          // Session locale invalide (token expire, compte supprime, etc.)
-          console.warn('Session locale invalide — deconnexion automatique')
-          await supabase.auth.signOut()
-          setUser(null)
-          setProfile(null)
-          setCachedProfile(null)
-          clearTimeout(timeoutId)
+    const init = async () => {
+      // Sécurité : au bout de 5s, on force la fin du loading au cas où Supabase/le réseau serait totalement bloqué
+      const safetyTimeout = setTimeout(() => {
+        if (!cancelled && !initializedRef.current) {
+          console.warn('[Auth] Init timeout de securite, on coupe le loading')
           setLoading(false)
+        }
+      }, 5000)
+
+      // ETAPE 1 : getSession() — lit le localStorage Supabase, quasi-instantane
+      // Cela restaure le JWT dans le client Supabase pour que les requetes RLS fonctionnent
+      try {
+        const fetchSessionPromise = supabase.auth.getSession()
+        const sessionTimeoutPromise = new Promise((resolve) => setTimeout(() => resolve('timeout'), 4000))
+        
+        const sessionResult = await Promise.race([fetchSessionPromise, sessionTimeoutPromise])
+        if (cancelled) {
+          clearTimeout(safetyTimeout)
           return
         }
 
-        setUser(validUser)
-        const data = await fetchProfile(validUser.id)
-        if (cancelled) return
+        if (sessionResult === 'timeout') {
+          console.warn('[Auth] supabase.auth.getSession timeout')
+          throw new Error('getSession timeout')
+        }
 
-        if (data) {
-          setProfile(data)
-          setCachedProfile(data)
-          setProfileLoadFailed(false)
-        } else {
-          // fetchProfile a echoue malgre une session valide
-          // Tenter un refresh de session puis re-essayer une fois
-          console.warn('fetchProfile echoue, tentative de refresh session...')
-          const { data: refreshData } = await supabase.auth.refreshSession()
+        const { data: { session } } = sessionResult
+
+        if (session?.user) {
+          setUser(session.user)
+          // Si on a un profil cache, on affiche tout de suite
+          if (cachedProfile) {
+            setLoading(false)
+          }
+
+          // ETAPE 2 : charger le profil frais (reseau) en arriere-plan
+          setSyncing(true)
+
+          const fetchPromise = fetchProfile(session.user.id)
+          const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve('timeout'), 5000))
+          
+          const freshProfileOrTimeout = await Promise.race([fetchPromise, timeoutPromise])
+
           if (cancelled) return
 
-          if (refreshData?.session) {
-            const retryData = await fetchProfile(validUser.id)
+          if (freshProfileOrTimeout !== 'timeout' && freshProfileOrTimeout) {
+            setProfile(freshProfileOrTimeout)
+            setCachedProfile(freshProfileOrTimeout)
+          } else if (freshProfileOrTimeout === 'timeout') {
+            console.warn('[Auth] fetchProfile timeout - proceeding with local cache')
+          }
+
+          // Si echec, on garde le cache — pas de deconnexion
+          setSyncing(false)
+          setLoading(false)
+
+          // ETAPE 3 : valider la session cote serveur (non-bloquant)
+          // Ceci detecte les tokens expires/revoques
+          try {
+            const { error: userError } = await supabase.auth.getUser()
             if (cancelled) return
-            if (retryData) {
-              setProfile(retryData)
-              setCachedProfile(retryData)
-              setProfileLoadFailed(false)
-            } else {
-              // Echec confirme — utiliser le cache ou marquer l'echec
-              const cached = getCachedProfile()
-              if (cached) {
-                setProfile(cached)
-                setProfileLoadFailed(false)
-              } else {
-                setProfileLoadFailed(true)
+            if (userError) {
+              console.warn('[Auth] Session invalide cote serveur:', userError.message)
+              // Tenter un refresh avant de deconnecter
+              const { data: refreshData } = await supabase.auth.refreshSession()
+              if (!refreshData?.session) {
+                console.warn('[Auth] Refresh echoue — deconnexion')
+                await supabase.auth.signOut().catch(() => {})
+                setUser(null)
+                setProfile(null)
+                setCachedProfile(null)
               }
             }
-          } else {
-            // Refresh echoue — utiliser le cache
-            const cached = getCachedProfile()
-            if (cached) {
-              setProfile(cached)
-              setProfileLoadFailed(false)
-            } else {
-              setProfileLoadFailed(true)
-            }
+          } catch {
+            // Erreur reseau sur getUser — ignorer, on garde la session locale
           }
+        } else {
+          // Pas de session
+          setUser(null)
+          if (!cachedProfile) {
+            setProfile(null)
+          }
+          setLoading(false)
         }
-      } else {
-        setUser(null)
-        // Pas de session Supabase — verifier le cache en cas de mode hors ligne
-        if (!navigator.onLine) {
-          const cached = getCachedProfile()
-          if (cached) {
-            setProfile(cached)
-          }
+      } catch (err) {
+        if (cancelled) return
+        console.error('[Auth] Init error:', err)
+        // getSession a echoue — utiliser le cache si disponible
+        if (cachedProfile) {
+          setProfile(cachedProfile)
+        }
+        setLoading(false)
+      } finally {
+        if (typeof safetyTimeout !== 'undefined') {
+          clearTimeout(safetyTimeout)
         }
       }
-      clearTimeout(timeoutId)
-      setLoading(false)
-    }).catch((err) => {
-      if (cancelled) return
-      console.error('Auth session error:', err)
-      // Echec total — utiliser le cache si disponible
-      const cached = getCachedProfile()
-      if (cached) {
-        setProfile(cached)
-      }
-      clearTimeout(timeoutId)
-      setLoading(false)
-    })
 
-    // Ecouter les changements d'etat d'authentification
+      initializedRef.current = true
+    }
+
+    init()
+
+    // Ecouter les changements (sign in, sign out, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (cancelled) return
+        // Ignorer les evenements avant l'init pour eviter les races
+        if (!initializedRef.current && event === 'INITIAL_SESSION') return
+
         setUser(session?.user ?? null)
         if (session?.user) {
-          const data = await fetchProfile(session.user.id)
-          if (data) {
-            setProfile(data)
-            setCachedProfile(data)
-            setProfileLoadFailed(false)
-          } else {
-            // fetchProfile a echoue — utiliser le cache
-            const cached = getCachedProfile()
-            if (cached) {
-              setProfile(cached)
-              setProfileLoadFailed(false)
-            } else {
-              setProfileLoadFailed(true)
+          try {
+            const data = await fetchProfile(session.user.id)
+            if (cancelled) return
+            if (data) {
+              setProfile(data)
+              setCachedProfile(data)
             }
+          } catch (err) {
+            console.warn('[Auth] fetchProfile error in onAuthStateChange:', err.message)
           }
         } else {
           setProfile(null)
@@ -206,13 +182,11 @@ export function AuthProvider({ children }) {
 
     return () => {
       cancelled = true
-      clearTimeout(timeoutId)
       subscription.unsubscribe()
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const signUp = async (email, password, displayName) => {
-    // Le display_name est passe via les metadata — le trigger DB cree le profil automatiquement
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -220,10 +194,7 @@ export function AuthProvider({ children }) {
     })
     if (error) return { error }
 
-    // Le trigger on_auth_user_created cree le profil cote serveur.
-    // Attendre un court instant pour que le trigger s'execute, puis charger le profil.
     if (data.user) {
-      // Petit delai pour laisser le trigger s'executer
       await new Promise((resolve) => setTimeout(resolve, 500))
       const profileData = await fetchProfile(data.user.id)
       setProfile(profileData)
@@ -243,7 +214,6 @@ export function AuthProvider({ children }) {
     setUser(null)
     setProfile(null)
     setCachedProfile(null)
-    // Nettoyage de l'ancien systeme
     localStorage.removeItem('profileId')
   }
 
@@ -263,7 +233,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, offline, profileLoadFailed, signUp, signIn, signOut, resetPassword, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, syncing, signUp, signIn, signOut, resetPassword, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   )

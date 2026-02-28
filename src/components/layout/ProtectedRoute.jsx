@@ -4,14 +4,13 @@ import { useLanguage } from '../../contexts/LanguageContext'
 import { useRef, useState, useEffect } from 'react'
 
 export default function ProtectedRoute({ children }) {
-  const { user, profile, loading, offline, signOut } = useAuth()
+  const { user, profile, loading, syncing, signOut } = useAuth()
   const { t } = useLanguage()
   const [showSlowWarning, setShowSlowWarning] = useState(false)
   const timerRef = useRef(null)
 
   useEffect(() => {
     if (loading) {
-      // Apres 3 secondes, afficher un avertissement
       timerRef.current = setTimeout(() => setShowSlowWarning(true), 3000)
     }
     return () => {
@@ -23,7 +22,6 @@ export default function ProtectedRoute({ children }) {
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-gray-50">
-        {/* Spinner */}
         <div className="w-12 h-12 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin mb-4" />
         <p className="text-gray-500 text-sm">{t('common.loading')}</p>
         {showSlowWarning && (
@@ -42,26 +40,19 @@ export default function ProtectedRoute({ children }) {
     )
   }
 
-  // En mode hors ligne, si on a un profil cache, on laisse passer
   if (!user && !profile) return <Navigate to="/login" replace />
 
-  // Si le user existe (session) mais le profil n'a pas pu etre charge → ecran d'erreur, pas onboarding
   if (user && !profile) {
     const handleForceSignOut = async () => {
-      // 1. Tenter le signOut Supabase normalement (timeout court)
       try {
         await Promise.race([
           signOut(),
           new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
         ])
       } catch {
-        // Si ça échoue ou timeout, on force le nettoyage local
-        console.warn('signOut timeout/error — forçage local')
+        console.warn('signOut timeout/error — forcage local')
       }
-
-      // 2. Nettoyage forcé : vider tout le localStorage Supabase + cache profil
       try {
-        // Supprimer les clés Supabase du localStorage
         const keysToRemove = []
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i)
@@ -71,10 +62,8 @@ export default function ProtectedRoute({ children }) {
         }
         keysToRemove.forEach((key) => localStorage.removeItem(key))
       } catch {
-        // localStorage indisponible
+        // Ignorer
       }
-
-      // 3. Vider les caches du service worker
       try {
         if ('caches' in window) {
           const names = await caches.keys()
@@ -83,8 +72,6 @@ export default function ProtectedRoute({ children }) {
       } catch {
         // Ignorer
       }
-
-      // 4. Forcer le rechargement complet
       window.location.href = '/login'
     }
     return (
@@ -118,7 +105,12 @@ export default function ProtectedRoute({ children }) {
 
   return (
     <>
-      {offline && (
+      {syncing && (
+        <div className="bg-blue-500 text-white text-center text-xs py-0.5 px-2 font-medium animate-pulse">
+          {t('offline.syncing')}
+        </div>
+      )}
+      {!navigator.onLine && (
         <div className="bg-amber-500 text-white text-center text-xs py-1 px-2 font-medium">
           {t('offline.banner')}
         </div>

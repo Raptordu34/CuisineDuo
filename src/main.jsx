@@ -8,12 +8,20 @@ if ('serviceWorker' in navigator) {
   // Ecouter les messages du SW (ex: rechargement necessaire apres deploiement)
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.data?.type === 'RELOAD_NEEDED') {
+      if (sessionStorage.getItem('sw_reload_attempted')) {
+        console.error('SW reload already attempted to fix stale assets. Stopping to prevent infinite loop.')
+        return
+      }
+      sessionStorage.setItem('sw_reload_attempted', '1')
       console.warn('SW detected stale assets, reloading...')
-      // Vider tous les caches avant de recharger
+      // Vider tous les caches Service Worker avant de recharger
       caches.keys().then((names) => {
         return Promise.all(names.map((name) => caches.delete(name)))
       }).then(() => {
-        window.location.reload()
+        // Ajouter un timestamp unique pour contourner le cache HTTP du navigateur sur la navigation
+        const url = new URL(window.location.href)
+        url.searchParams.set('_sw', Date.now())
+        window.location.replace(url.toString())
       })
     }
   })
@@ -47,3 +55,9 @@ createRoot(document.getElementById('root')).render(
     <App />
   </StrictMode>,
 )
+
+// Réinitialiser les flags antiflipping si l'application a bien pu démarrer après 3 secondes (signifie pas de crash immédiat)
+setTimeout(() => {
+  sessionStorage.removeItem('sw_reload_attempted')
+  sessionStorage.removeItem('reload_attempted')
+}, 3000)

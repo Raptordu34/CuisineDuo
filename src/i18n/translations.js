@@ -226,6 +226,7 @@ export const translations = {
     'offline.profileLoadFailed': 'Impossible de charger votre profil',
     'offline.checkConnection': 'Verifiez votre connexion internet et reessayez.',
     'offline.retry': 'Reessayer',
+    'offline.syncing': 'Synchronisation...',
     'offline.networkError': 'Erreur reseau. Verifiez votre connexion.',
 
     // Miam Orchestrator
@@ -477,6 +478,7 @@ export const translations = {
     'offline.profileLoadFailed': 'Unable to load your profile',
     'offline.checkConnection': 'Check your internet connection and try again.',
     'offline.retry': 'Retry',
+    'offline.syncing': 'Syncing...',
     'offline.networkError': 'Network error. Check your connection.',
 
     // Miam Orchestrator
@@ -728,6 +730,7 @@ export const translations = {
     'offline.profileLoadFailed': '\u65e0\u6cd5\u52a0\u8f7d\u60a8\u7684\u4e2a\u4eba\u8d44\u6599',
     'offline.checkConnection': '\u8bf7\u68c0\u67e5\u7f51\u7edc\u8fde\u63a5\u5e76\u91cd\u8bd5\u3002',
     'offline.retry': '\u91cd\u8bd5',
+    'offline.syncing': '\u540c\u6b65\u4e2d...',
     'offline.networkError': '\u7f51\u7edc\u9519\u8bef\u3002\u8bf7\u68c0\u67e5\u8fde\u63a5\u3002',
 
     // Miam Orchestrator
