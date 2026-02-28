@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
+import { supabase } from '../lib/supabase'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 
 export default function LoginPage() {
@@ -23,14 +24,44 @@ export default function LoginPage() {
     setError(null)
     setSubmitting(true)
 
-    const { error: signInError } = await signIn(email, password)
-    if (signInError) {
-      setError(t('login.invalidCredentials'))
-      setSubmitting(false)
-      return
-    }
+    // Timeout : si signIn ne repond pas en 10s, on considere que c'est bloque
+    let timeoutId
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('SIGN_IN_TIMEOUT')), 10000)
+    })
 
-    navigate('/')
+    try {
+      const result = await Promise.race([
+        signIn(email, password),
+        timeoutPromise,
+      ])
+      clearTimeout(timeoutId)
+
+      if (result.error) {
+        const msg = result.error.message || ''
+        if (msg.includes('Invalid login credentials')) {
+          setError(t('login.invalidCredentials'))
+        } else if (msg.includes('Email not confirmed')) {
+          setError(t('login.emailNotConfirmed'))
+        } else {
+          setError(`${t('login.invalidCredentials')} (${msg})`)
+        }
+        setSubmitting(false)
+        return
+      }
+      navigate('/')
+    } catch (err) {
+      clearTimeout(timeoutId)
+      console.error('Sign in error:', err)
+      if (err.message === 'SIGN_IN_TIMEOUT') {
+        // Le signIn a pend — tester directement si Supabase est joignable
+        setError(t('login.connectionStuck'))
+        setSubmitting(false)
+      } else {
+        setError(`${t('offline.networkError')} (${err.message || 'Unknown error'})`)
+        setSubmitting(false)
+      }
+    }
   }
 
   const handleSignUp = async (e) => {
@@ -49,23 +80,93 @@ export default function LoginPage() {
 
     setSubmitting(true)
 
-    const { error: signUpError } = await signUp(email, password, displayName.trim())
-    if (signUpError) {
-      if (signUpError.message?.includes('already registered')) {
-        setError(t('login.emailInUse'))
+    let timeoutId
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('SIGN_IN_TIMEOUT')), 10000)
+    })
+
+    try {
+      const result = await Promise.race([
+        signUp(email, password, displayName.trim()),
+        timeoutPromise,
+      ])
+      clearTimeout(timeoutId)
+
+      if (result.error) {
+        if (result.error.message?.includes('already registered')) {
+          setError(t('login.emailInUse'))
+        } else {
+          setError(result.error.message)
+        }
+        setSubmitting(false)
+        return
+      }
+
+      navigate('/onboarding')
+    } catch (err) {
+      clearTimeout(timeoutId)
+      console.error('Sign up error:', err)
+      if (err.message === 'SIGN_IN_TIMEOUT') {
+        setError(t('login.connectionStuck'))
       } else {
-        setError(signUpError.message)
+        setError(`${t('offline.networkError')} (${err.message || 'Unknown error'})`)
       }
       setSubmitting(false)
-      return
     }
-
-    navigate('/onboarding')
   }
 
   const switchMode = () => {
     setMode(mode === 'signIn' ? 'signUp' : 'signIn')
     setError(null)
+  }
+
+  const handleClearAndRetry = async () => {
+    // 1. Deconnecter Supabase (timeout court, ne pas bloquer si ca pend)
+    try {
+      await Promise.race([
+        supabase.auth.signOut(),
+        new Promise((resolve) => setTimeout(resolve, 2000)),
+      ])
+    } catch {
+      // Ignorer
+    }
+
+    // 2. Nettoyer TOUT le localStorage (sessions Supabase corrompues incluses)
+    try {
+      localStorage.clear()
+    } catch {
+      // Ignorer
+    }
+
+    // 3. Nettoyer sessionStorage aussi
+    try {
+      sessionStorage.clear()
+    } catch {
+      // Ignorer
+    }
+
+    // 4. Nettoyer les caches du service worker
+    if ('caches' in window) {
+      try {
+        const names = await caches.keys()
+        await Promise.all(names.map((name) => caches.delete(name)))
+      } catch {
+        // Ignorer
+      }
+    }
+
+    // 5. Dereferencier le service worker
+    if ('serviceWorker' in navigator) {
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations()
+        await Promise.all(registrations.map((r) => r.unregister()))
+      } catch {
+        // Ignorer
+      }
+    }
+
+    // 6. Forcer le rechargement complet (bypass browser cache)
+    window.location.href = '/login?cleared=' + Date.now()
   }
 
   return (
@@ -84,7 +185,18 @@ export default function LoginPage() {
         </div>
 
         {error && (
-          <p className="text-sm text-red-600 bg-red-50 rounded-lg p-3">{error}</p>
+          <div className="text-sm text-red-600 bg-red-50 rounded-lg p-3 space-y-2">
+            <p>{error}</p>
+            {error === t('login.connectionStuck') && (
+              <button
+                type="button"
+                onClick={handleClearAndRetry}
+                className="block w-full text-center text-xs font-medium text-orange-600 hover:text-orange-700 underline cursor-pointer"
+              >
+                {t('login.clearCacheAndRetry')}
+              </button>
+            )}
+          </div>
         )}
 
         {mode === 'signIn' ? (

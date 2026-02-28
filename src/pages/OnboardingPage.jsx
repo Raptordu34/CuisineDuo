@@ -22,28 +22,32 @@ export default function OnboardingPage() {
     setError(null)
     setLoading(true)
 
-    const { data: household, error: createErr } = await supabase
-      .from('households')
-      .insert({ name: householdName })
-      .select()
-      .single()
+    try {
+      const { data: household, error: createErr } = await supabase
+        .from('households')
+        .insert({ name: householdName })
+        .select()
+        .single()
 
-    if (createErr) {
-      setError(createErr.message)
-      setLoading(false)
-      return
-    }
+      if (createErr) {
+        setError(createErr.message)
+        setLoading(false)
+        return
+      }
 
-    const { error: updateErr } = await supabase
-      .from('profiles')
-      .update({ household_id: household.id })
-      .eq('id', user.id)
+      const { error: updateErr } = await supabase
+        .from('profiles')
+        .update({ household_id: household.id })
+        .eq('id', user.id)
 
-    if (updateErr) {
-      setError(updateErr.message)
-    } else {
-      setCreatedCode(household.invite_code)
-      await refreshProfile()
+      if (updateErr) {
+        setError(updateErr.message)
+      } else {
+        setCreatedCode(household.invite_code)
+        await refreshProfile()
+      }
+    } catch {
+      setError(t('offline.networkError'))
     }
     setLoading(false)
   }
@@ -53,27 +57,31 @@ export default function OnboardingPage() {
     setError(null)
     setLoading(true)
 
-    const { data: household, error: findErr } = await supabase
-      .from('households')
-      .select('id')
-      .eq('invite_code', inviteCode.trim().toLowerCase())
-      .single()
+    try {
+      const { data: household, error: findErr } = await supabase
+        .from('households')
+        .select('id')
+        .eq('invite_code', inviteCode.trim().toLowerCase())
+        .single()
 
-    if (findErr || !household) {
-      setError(t('onboarding.codeNotFound'))
-      setLoading(false)
-      return
-    }
+      if (findErr || !household) {
+        setError(t('onboarding.codeNotFound'))
+        setLoading(false)
+        return
+      }
 
-    const { error: updateErr } = await supabase
-      .from('profiles')
-      .update({ household_id: household.id })
-      .eq('id', user.id)
+      const { error: updateErr } = await supabase
+        .from('profiles')
+        .update({ household_id: household.id })
+        .eq('id', user.id)
 
-    if (updateErr) {
-      setError(updateErr.message)
-    } else {
-      await refreshProfile()
+      if (updateErr) {
+        setError(updateErr.message)
+      } else {
+        await refreshProfile()
+      }
+    } catch {
+      setError(t('offline.networkError'))
     }
     setLoading(false)
   }

@@ -1,17 +1,16 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useLanguage } from '../../contexts/LanguageContext'
-import { apiPost } from '../../lib/apiClient'
+import { useMiam } from '../../contexts/MiamContext'
 import ScanReviewItemRow from './ScanReviewItemRow'
 import DictationButton from '../DictationButton'
 import DictationTrace from '../DictationTrace'
 
 export default function ScanReviewModal({ items: initialItems, receiptTotal, onClose, onConfirm }) {
-  const { t, lang } = useLanguage()
+  const { t } = useLanguage()
+  const { registerContextProvider, registerActions } = useMiam()
   const [items, setItems] = useState(initialItems)
   const [checked, setChecked] = useState(() => initialItems.map(() => true))
   const [saving, setSaving] = useState(false)
-  const [dictationCorrecting, setDictationCorrecting] = useState(false)
-  const [dictationTrace, setDictationTrace] = useState(null)
 
   const selectedCount = checked.filter(Boolean).length
 
@@ -38,29 +37,54 @@ export default function ScanReviewModal({ items: initialItems, receiptTotal, onC
     setItems((prev) => prev.map((item, i) => (i === index ? newItem : item)))
   }
 
-  const handleDictationResult = useCallback(async (text, dictLang) => {
-    if (!text.trim()) return
-    setDictationCorrecting(true)
-    try {
-      const res = await apiPost('/api/correct-transcription', { text, context: 'scan-correction', lang: dictLang || lang, items })
-      if (res.ok) {
-        const data = await res.json()
-        if (data.items && Array.isArray(data.items)) {
-          setItems(data.items)
-          setChecked(data.items.map(() => true))
-        }
-        setDictationTrace({
-          rawTranscript: text,
-          correctedResult: data.changes || t('dictation.scanCorrectionApplied'),
-          timestamp: Date.now(),
-        })
-      }
-    } catch {
-      // silently fail, keep current items
-    } finally {
-      setDictationCorrecting(false)
+  // Enregistrer contexte et actions pour Miam
+  useEffect(() => {
+    const unregisterContext = registerContextProvider('scanReviewItems', () => ({
+      mode: 'scanReview',
+      items: items.map((item, i) => ({
+        index: i,
+        name: item.name,
+        brand: item.brand,
+        quantity: item.quantity,
+        unit: item.unit,
+        price: item.price,
+        price_per_kg: item.price_per_kg,
+        category: item.category,
+        checked: checked[i],
+      })),
+    }))
+
+    const unregisterActions = registerActions({
+      updateScanItem: {
+        handler: ({ index, fields }) => {
+          setItems(prev => prev.map((item, i) => i === index ? { ...item, ...fields } : item))
+          return { success: true }
+        },
+        description: 'Update a scanned item by index',
+      },
+      removeScanItem: {
+        handler: ({ index }) => {
+          setItems(prev => prev.filter((_, i) => i !== index))
+          setChecked(prev => prev.filter((_, i) => i !== index))
+          return { success: true }
+        },
+        description: 'Remove a scanned item by index',
+      },
+      addScanItem: {
+        handler: ({ item }) => {
+          setItems(prev => [...prev, item])
+          setChecked(prev => [...prev, true])
+          return { success: true }
+        },
+        description: 'Add a new item to the scan list',
+      },
+    })
+
+    return () => {
+      unregisterContext()
+      unregisterActions()
     }
-  }, [lang, items, t])
+  }, [registerContextProvider, registerActions, items, checked])
 
   const handleConfirm = async () => {
     if (saving || selectedCount === 0) return
@@ -76,27 +100,23 @@ export default function ScanReviewModal({ items: initialItems, receiptTotal, onC
         className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between shrink-0">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 shrink-0">
           <div className="flex items-center gap-2">
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer mr-2">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </button>
             <h2 className="text-lg font-bold text-gray-900">{t('inventory.scanReview')}</h2>
-            <DictationButton
-              onResult={handleDictationResult}
-              disabled={saving || dictationCorrecting}
-              color="orange"
-            />
-            {dictationCorrecting && (
-              <span className="text-xs text-gray-400 animate-pulse">{t('dictation.correcting')}</span>
-            )}
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer text-xl">&times;</button>
+          <button
+            onClick={handleConfirm}
+            disabled={selectedCount === 0 || saving}
+            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-full text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          >
+            {t('inventory.addScanned', { count: selectedCount })}
+          </button>
         </div>
-
-        {/* Dictation trace */}
-        {dictationTrace && (
-          <div className="px-4 pt-2 shrink-0">
-            <DictationTrace trace={dictationTrace} />
-          </div>
-        )}
 
         {/* Stats header */}
         <div className="px-4 py-3 border-b border-gray-100 shrink-0 space-y-1">
@@ -131,7 +151,7 @@ export default function ScanReviewModal({ items: initialItems, receiptTotal, onC
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-24 md:pb-4">
           {items.map((item, index) => (
             <ScanReviewItemRow
               key={index}
@@ -142,23 +162,6 @@ export default function ScanReviewModal({ items: initialItems, receiptTotal, onC
               onChange={updateItem}
             />
           ))}
-        </div>
-
-        <div className="p-4 border-t border-gray-200 flex gap-3 shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 px-4 py-2.5 border border-gray-300 rounded-full text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
-          >
-            {t('inventory.cancel')}
-          </button>
-          <button
-            onClick={handleConfirm}
-            disabled={selectedCount === 0 || saving}
-            className="flex-1 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-full text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-          >
-            {t('inventory.addScanned', { count: selectedCount })}
-          </button>
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 # CuisineDuo
 
-**Application PWA de gestion culinaire collaborative pour le foyer** — inventaire, recettes, planification de repas par swipe, chat IA et listes de courses, le tout synchronis en temps r el.
+**Application PWA de gestion culinaire collaborative pour le foyer** — inventaire alimentaire, chat temps reel avec GIFs et reactions, assistant IA Miam, le tout synchronise en temps reel.
 
 ![React](https://img.shields.io/badge/React-19-blue?logo=react)
 ![Vite](https://img.shields.io/badge/Vite-7-purple?logo=vite)
@@ -29,7 +29,7 @@
 
 ## Apercu
 
-CuisineDuo est une Progressive Web App pensee pour la gestion culinaire au sein d'un foyer. Elle permet a plusieurs membres de collaborer en temps reel : gerer les stocks, decouvrir des recettes, et communiquer via un chat integre avec un assistant IA.
+CuisineDuo est une Progressive Web App pensee pour la gestion culinaire au sein d'un foyer. Elle permet a plusieurs membres de collaborer en temps reel : gerer les stocks alimentaires et communiquer via un chat integre avec un assistant IA contextuel.
 
 L'application est concue mobile-first, installable sur l'ecran d'accueil, et supporte les notifications push.
 
@@ -39,28 +39,36 @@ L'application est concue mobile-first, installable sur l'ecran d'accueil, et sup
 
 ### Gestion d'inventaire
 - Ajout manuel ou par **scan de ticket de caisse** (OCR via Gemini)
-- Suivi des quantites, prix, dates de peremption
-- Historique de consommation et suivi budgetaire
 - Saisie vocale avec correction IA
-
-### Recettes
-- Catalogue de recettes partage au sein du foyer
-- Notes et commentaires des membres
-- Assistant IA pour editer, rechercher ou obtenir des conseils sur une recette
-- Mode cuisine pas-a-pas avec minuteur integre
+- Suivi des quantites, prix, prix au kg, dates de peremption
+- Verification IA des prix pour les articles au poids
+- Historique de consommation
+- Filtrage par categorie, selection de magasin
+- Selecteur visuel de niveau de remplissage
 
 ### Chat du foyer
-- Messagerie temps reel entre les membres
-- Assistant IA **Miam** invocable dans la conversation
+- Messagerie temps reel entre les membres (Supabase Realtime)
+- **GIFs** : recherche Giphy + suggestions IA de requetes
+- **Reactions emoji** sur les messages
+- **Reponses**, **edition** et **suppression** de messages
+- Indicateurs de lecture par membre (read receipts)
 - Notifications push pour les nouveaux messages
+- Menu contextuel par appui long
 
-### Listes de courses
-- Creation et gestion de listes multiples
-- Generation assistee par IA
-- Synchronisation avec l'inventaire
+### Assistant IA Miam
+- Invocable via bouton flottant (FAB) ou commande vocale **"Hey Miam"**
+- Orchestrateur avec **function calling** : actions contextuelles selon la page
+- Synthese vocale (TTS) des reponses
+- Panneau conversationnel coulissant
+- Historique de conversation persiste par foyer
+
+### Journaux IA
+- Page de debug pour visualiser toutes les interactions IA (logs)
+- Filtrage par endpoint, duree, erreurs
 
 ### Multilingue
 - Interface disponible en francais, anglais et chinois
+- Selecteur de langue integre
 
 ---
 
@@ -68,14 +76,15 @@ L'application est concue mobile-first, installable sur l'ecran d'accueil, et sup
 
 | Couche | Technologies |
 |--------|-------------|
-| **Frontend** | React 19, React Router 7, Tailwind CSS 4 |
-| **Build** | Vite 7 |
+| **Frontend** | React 19, React Router 7 (`react-router-dom`), Tailwind CSS 4 |
+| **Build** | Vite 7, `vite-plugin-pwa` (Workbox `injectManifest`) |
 | **Backend** | Vercel Serverless Functions (Node.js) |
-| **Base de donnees** | Supabase (PostgreSQL + Realtime + Auth) |
-| **IA** | Google Gemini 2.0 Flash |
-| **Notifications** | Web Push API (VAPID) |
+| **Base de donnees** | Supabase (PostgreSQL + Realtime + Auth + RLS) |
+| **IA** | Google Gemini 2.0 Flash (`@google/generative-ai`) |
+| **GIFs** | Giphy API |
+| **Notifications** | Web Push API (VAPID, `web-push`) |
 | **Voix** | Web Speech API + correction Gemini |
-| **PWA** | Service Worker, Web App Manifest |
+| **PWA** | Service Worker (`src/sw.js` via `vite-plugin-pwa`), Web App Manifest |
 
 ---
 
@@ -84,19 +93,22 @@ L'application est concue mobile-first, installable sur l'ecran d'accueil, et sup
 ```
 Client (React SPA)
     |
-    |--- Supabase (BDD PostgreSQL + Realtime subscriptions)
+    |--- Supabase (BDD PostgreSQL + Realtime + Auth)
     |
     |--- Vercel Functions (/api/*)
               |
-              |--- Google Gemini API (chat, scan, generation)
+              |--- Google Gemini API (orchestrateur, scan, correction, prix)
+              |--- Giphy API (GIFs)
               |--- Web Push (notifications)
 ```
 
 **Principaux patterns :**
-- **Contextes React** pour l'authentification (profils) et la langue
-- **Hooks custom** pour la logique metier (inventaire, swipe, dictee, notifications)
-- **Supabase Realtime** pour la synchronisation multi-appareil (messages, votes, inventaire)
+- **4 Contextes React** : authentification (Supabase Auth), langue, assistant Miam, messages non lus
+- **7 Hooks custom** : dictee, long press, reactions, actions Miam, notifications, statut en ligne, wake word
+- **Supabase Realtime** pour la synchronisation multi-appareil (messages, reactions, lecture, inventaire)
 - **Serverless Functions** comme proxy securise vers les API externes
+- **JWT Bearer tokens** pour l'authentification des appels API
+- **AI logging** silencieux de toutes les interactions IA
 
 ---
 
@@ -107,13 +119,14 @@ Client (React SPA)
 - **Node.js** >= 18
 - Un projet **Supabase** configure (voir [Base de donnees](#base-de-donnees))
 - Une **cle API Google Gemini**
+- Une **cle API Giphy**
 - Des **cles VAPID** pour les notifications push
 
 ### Demarrage
 
 ```bash
 # Cloner le depot
-git clone https://github.com/<votre-utilisateur>/CuisineDuo.git
+git clone https://github.com/Raptordu34/CuisineDuo.git
 cd CuisineDuo
 
 # Installer les dependances
@@ -147,6 +160,9 @@ VITE_SUPABASE_ANON_KEY=votre_cle_anon_supabase
 GEMINI_API_KEY=votre_cle_gemini
 GEMINI_SCAN_API_KEY=votre_cle_gemini_scan
 
+# Giphy
+GIPHY_API_KEY=votre_cle_giphy
+
 # Web Push (VAPID)
 VITE_VAPID_PUBLIC_KEY=votre_cle_publique_vapid
 VAPID_PRIVATE_KEY=votre_cle_privee_vapid
@@ -173,63 +189,70 @@ VAPID_PRIVATE_KEY=votre_cle_privee_vapid
 ```
 CuisineDuo/
 ├── api/                          # Fonctions serverless Vercel
-│   ├── chat-ai.js                # Chat IA du foyer (Miam)
-│   ├── scan-receipt.js           # OCR ticket de caisse
+│   ├── miam-orchestrator.js      # Orchestrateur IA Miam (function calling)
+│   ├── chat-ai.js                # Chat IA du foyer (legacy)
+│   ├── scan-receipt.js           # OCR ticket de caisse / photo d'aliments
 │   ├── correct-transcription.js  # Correction vocale IA
-│   ├── generate-recipe-image.js  # Recherche d'images de recettes
-│   ├── generate-swipe-recipes.js # Generation de suggestions IA
-│   ├── recipe-ai-chat.js        # Assistant IA par recette
-│   ├── recipe-ai-search.js      # Recherche de recettes IA
-│   ├── create-matched-recipes.js # Sauvegarde des matchs swipe
-│   ├── send-notification.js     # Envoi de notifications push
-│   └── subscribe-push.js        # Gestion des abonnements push
+│   ├── verify-prices.js          # Verification IA des prix au poids
+│   ├── gif-search.js             # Recherche / trending GIFs (Giphy)
+│   ├── gif-suggest.js            # Suggestions GIF par IA + Giphy
+│   ├── send-notification.js      # Envoi de notifications push
+│   └── subscribe-push.js         # Gestion des abonnements push
 ├── public/
 │   ├── manifest.json             # Manifeste PWA
-│   ├── sw.js                     # Service Worker (push)
 │   └── icons/                    # Icones de l'application
 ├── src/
 │   ├── main.jsx                  # Point d'entree React + enregistrement SW
-│   ├── App.jsx                   # Configuration du routage
+│   ├── App.jsx                   # Configuration du routage + providers
 │   ├── index.css                 # Import Tailwind CSS
+│   ├── sw.js                     # Service Worker (Workbox injectManifest)
 │   ├── components/
-│   │   ├── layout/               # Navigation, Layout, ProtectedRoute
-│   │   ├── recipes/              # Composants recettes (15 fichiers)
-│   │   ├── inventory/            # Composants inventaire (11 fichiers)
-│   │   ├── shopping/             # Composants listes de courses
-│   │   ├── swipe/                # Interface de vote par swipe
-│   │   ├── cooking/              # Mode cuisine
-│   │   └── DictationButton.jsx   # Bouton de dictee vocale
+│   │   ├── chat/                 # Chat : EmojiPicker, GifPicker, MessageContextMenu,
+│   │   │                         #   ReactionBadges, ReactionBar
+│   │   ├── inventory/            # Inventaire : AddItemModal, CategoryFilter, ConsumeModal,
+│   │   │                         #   EditItemModal, InAppCamera, InventoryItemCard,
+│   │   │                         #   InventoryList, ScanReceiptButton, ScanReviewItemRow,
+│   │   │                         #   ScanReviewModal, StoreSelectDialog
+│   │   ├── layout/               # Layout, Navbar, ProtectedRoute, ReloadPrompt
+│   │   ├── miam/                 # MiamFAB (bouton flottant), MiamSheet (panneau)
+│   │   ├── DictationButton.jsx   # Bouton de dictee vocale
+│   │   ├── DictationTrace.jsx    # Affichage de la transcription en cours
+│   │   ├── FillLevelPicker.jsx   # Selecteur visuel de niveau de remplissage
+│   │   └── LanguageSwitcher.jsx  # Selecteur de langue (FR/EN/ZH)
 │   ├── contexts/
-│   │   ├── AuthContext.jsx       # Authentification par profils
-│   │   └── LanguageContext.jsx   # Internationalisation (FR/EN/ZH)
-│   ├── hooks/                    # Hooks custom metier
+│   │   ├── AuthContext.jsx       # Authentification Supabase Auth (email/password)
+│   │   ├── LanguageContext.jsx   # Internationalisation (FR/EN/ZH)
+│   │   ├── MiamContext.jsx       # Etat de l'assistant Miam (TTS, wake word, actions)
+│   │   └── UnreadMessagesContext.jsx  # Messages non lus + statuts de lecture
+│   ├── hooks/
+│   │   ├── useDictation.js       # Reconnaissance vocale + correction IA
+│   │   ├── useLongPress.js       # Geste appui long (menu contextuel)
+│   │   ├── useMessageReactions.js # Reactions emoji sur les messages
+│   │   ├── useMiamActions.js     # Enregistrement d'actions Miam par page
 │   │   ├── useNotifications.js   # Notifications push
-│   │   ├── useSwipeSession.js    # Session de vote swipe
-│   │   ├── useTasteProfile.js    # Preferences gustatives
-│   │   ├── useShoppingList.js    # Listes de courses
-│   │   ├── useDictation.js       # Reconnaissance vocale
-│   │   └── useRecipeAIEdit.js    # Edition IA de recettes
-│   ├── pages/                    # Pages de l'application
-│   │   ├── LoginPage.jsx         # Selection de profil
-│   │   ├── OnboardingPage.jsx    # Creation de foyer
+│   │   ├── useOnlineStatus.js    # Detection en ligne / hors ligne
+│   │   └── useWakeWord.js        # Activation vocale "Hey Miam"
+│   ├── pages/
+│   │   ├── LoginPage.jsx         # Connexion (email/password)
+│   │   ├── OnboardingPage.jsx    # Creation / rejoindre un foyer
 │   │   ├── HomePage.jsx          # Tableau de bord
-│   │   ├── ChatPage.jsx          # Chat du foyer
 │   │   ├── InventoryPage.jsx     # Gestion des stocks
-│   │   ├── RecipesPage.jsx       # Catalogue de recettes
-│   │   ├── RecipeDetailPage.jsx  # Detail d'une recette
-│   │   ├── CookingModePage.jsx   # Mode cuisine pas-a-pas
-│   │   ├── SwipePage.jsx         # Vote par swipe
-│   │   ├── SwipeResultsPage.jsx  # Resultats des matchs
-│   │   ├── ShoppingListPage.jsx  # Listes de courses
-│   │   └── TasteProfilePage.jsx  # Profil de gout personnel
+│   │   ├── ChatPage.jsx          # Chat du foyer
+│   │   └── AILogsPage.jsx        # Debug des interactions IA
 │   ├── lib/
-│   │   └── supabase.js           # Client Supabase
+│   │   ├── supabase.js           # Client Supabase
+│   │   ├── apiClient.js          # Fetch wrapper authentifie (JWT Bearer)
+│   │   └── aiLogger.js           # Logging silencieux des interactions IA
 │   └── i18n/
-│       └── translations.js       # Traductions multilingues
+│       └── translations.js       # Traductions multilingues (FR/EN/ZH)
+├── sql_history/                  # Historique des migrations SQL
 ├── package.json
 ├── vite.config.js
-├── vercel.json                   # Configuration de deploiement
+├── vercel.json                   # Configuration de deploiement Vercel
+├── api-dev-server.js             # Serveur Express local pour les API
 ├── eslint.config.js
+├── CLAUDE.md                     # Contexte pour l'assistant Claude
+├── Gemini.md                     # Contexte pour l'assistant Gemini
 └── CONTRIBUTING.md               # Guide de contribution
 ```
 
@@ -237,18 +260,17 @@ CuisineDuo/
 
 ## API Serverless
 
-Toutes les fonctions API sont situees dans le dossier `api/` et deployees automatiquement sur Vercel.
+Toutes les fonctions API sont situees dans le dossier `api/` et deployees automatiquement sur Vercel. Les appels sont authentifies via JWT Bearer token (Supabase Auth).
 
 | Endpoint | Methode | Description |
 |----------|---------|-------------|
-| `/api/chat-ai` | POST | Conversation avec l'assistant IA Miam |
-| `/api/scan-receipt` | POST | Analyse OCR d'un ticket de caisse ou photo d'aliments |
+| `/api/miam-orchestrator` | POST | Orchestrateur IA Miam avec function calling contextuel |
+| `/api/chat-ai` | POST | Chat IA du foyer (legacy) |
+| `/api/scan-receipt` | POST | OCR de ticket de caisse ou photo d'aliments via Gemini |
 | `/api/correct-transcription` | POST | Correction IA d'une transcription vocale |
-| `/api/generate-recipe-image` | POST | Recherche d'image pour une recette |
-| `/api/generate-swipe-recipes` | POST | Generation de suggestions de repas par IA |
-| `/api/recipe-ai-chat` | POST | Assistant IA contextuel a une recette |
-| `/api/recipe-ai-search` | POST | Recherche de recettes par description naturelle |
-| `/api/create-matched-recipes` | POST | Sauvegarde des recettes matchees en session swipe |
+| `/api/verify-prices` | POST | Verification IA des prix pour articles au poids |
+| `/api/gif-search` | POST | Recherche et trending de GIFs via Giphy |
+| `/api/gif-suggest` | POST | Suggestions de requetes GIF par Gemini + Giphy |
 | `/api/send-notification` | POST | Envoi d'une notification push au foyer |
 | `/api/subscribe-push` | POST | Enregistrement/suppression d'un abonnement push |
 
@@ -256,30 +278,27 @@ Toutes les fonctions API sont situees dans le dossier `api/` et deployees automa
 
 ## Base de donnees
 
-Le schema PostgreSQL complet est disponible dans `archivesqleditor/CuisineDuo_Full_Schema_&_RLS.sql`.
+Le schema PostgreSQL est gere via des migrations successives dans `sql_history/`. Toutes les tables utilisent RLS (Row Level Security) avec `auth.uid()` et `auth_user_household_id()`.
 
-### Tables principales
+### Tables actives
 
 | Table | Description |
 |-------|-------------|
-| `profiles` | Profils utilisateurs au sein d'un foyer |
 | `households` | Foyers (unite de partage des donnees) |
-| `messages` | Messages du chat (humains et IA) |
-| `recipes` | Catalogue de recettes du foyer |
-| `recipe_taste_params` | Profil gustatif par recette |
-| `ingredients` | Ingredients des recettes |
-| `inventory_items` | Stock actuel (quantite, prix, peremption) |
+| `profiles` | Membres d'un foyer (lies a Supabase Auth via `id = auth.uid()`) |
+| `inventory_items` | Stock actuel (quantite, prix, peremption, magasin) |
 | `consumed_items` | Historique de consommation |
-| `shopping_lists` | Listes de courses |
-| `shopping_list_items` | Elements des listes de courses |
-| `cooking_history` | Historique des recettes cuisinees |
-| `taste_preferences` | Preferences gustatives personnelles |
-| `swipe_sessions` | Sessions de planification de repas |
-| `swipe_session_recipes` | Recettes proposees par session |
-| `swipe_votes` | Votes individuels |
+| `messages` | Messages du chat (texte, GIFs, reponses, edition, suppression douce) |
+| `message_reactions` | Reactions emoji sur les messages |
+| `chat_read_status` | Statut de lecture du chat par membre |
 | `push_subscriptions` | Abonnements aux notifications push |
+| `ai_logs` | Logs des interactions IA (debug) |
 
-Toutes les tables sont scopees par `household_id` avec des politiques RLS (Row Level Security) configurees dans Supabase.
+### Tables legacy (en base, non utilisees)
+
+`recipes`, `recipe_comments`, `recipe_taste_params`, `recipe_ratings`, `cooking_history`, `taste_preferences`, `swipe_sessions`, `swipe_session_recipes`, `swipe_votes`, `shopping_lists`, `shopping_list_items`
+
+Toutes les tables sont scopees par `household_id` avec des politiques RLS configurees dans Supabase.
 
 ---
 

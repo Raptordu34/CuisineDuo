@@ -6,12 +6,31 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { useNotifications } from '../hooks/useNotifications'
 import { useMiamActions } from '../hooks/useMiamActions'
 
+const STATS_CACHE_KEY = 'cuisineduo_stats'
+
+function getCachedStats(householdId) {
+  try {
+    const raw = localStorage.getItem(`${STATS_CACHE_KEY}_${householdId}`)
+    return raw ? JSON.parse(raw) : { inStock: 0, expenses: 0, expiringSoon: 0 }
+  } catch {
+    return { inStock: 0, expenses: 0, expiringSoon: 0 }
+  }
+}
+
+function setCachedStats(householdId, stats) {
+  try {
+    localStorage.setItem(`${STATS_CACHE_KEY}_${householdId}`, JSON.stringify(stats))
+  } catch {
+    // localStorage plein ou indisponible
+  }
+}
+
 export default function HomePage() {
   const { profile } = useAuth()
   const { t } = useLanguage()
   const navigate = useNavigate()
   const { supported, permission, subscribed, subscribe } = useNotifications()
-  const [stats, setStats] = useState({ inStock: 0, expenses: 0, expiringSoon: 0 })
+  const [stats, setStats] = useState(() => getCachedStats(profile?.household_id))
 
   // Miam orchestrator: no page-specific actions (navigate is built-in)
   useMiamActions({})
@@ -47,11 +66,13 @@ export default function HomePage() {
         const purchaseTotal = items.reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0)
         const consumedTotal = consumed ? consumed.reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0) : 0
 
-        setStats({
+        const newStats = {
           inStock: items.length,
           expenses: (purchaseTotal + consumedTotal).toFixed(2),
           expiringSoon,
-        })
+        }
+        setStats(newStats)
+        setCachedStats(profile.household_id, newStats)
       } catch (err) {
         console.error('Failed to fetch dashboard stats:', err)
       }
@@ -95,7 +116,7 @@ export default function HomePage() {
           title={t('home.scanReceipt')}
           description={t('home.scanReceiptDesc')}
           color="orange"
-          onClick={() => navigate('/inventory')}
+          onClick={() => navigate('/inventory?action=scan')}
         />
         <DashboardCard
           icon="📦"

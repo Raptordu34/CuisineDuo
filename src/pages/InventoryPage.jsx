@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -11,6 +13,8 @@ import EditItemModal from '../components/inventory/EditItemModal'
 import ConsumeModal from '../components/inventory/ConsumeModal'
 import ScanReceiptButton from '../components/inventory/ScanReceiptButton'
 import ScanReviewModal from '../components/inventory/ScanReviewModal'
+import StoreSelectDialog from '../components/inventory/StoreSelectDialog'
+import { apiPost } from '../lib/apiClient'
 
 function toKg(q, u) {
   if (u === 'kg' || u === 'l') return q
@@ -30,17 +34,39 @@ function autoPriceCalc(row) {
   return row
 }
 
+const INVENTORY_CACHE_KEY = 'cuisineduo_inventory'
+
+function getCachedInventory(householdId) {
+  try {
+    const raw = localStorage.getItem(`${INVENTORY_CACHE_KEY}_${householdId}`)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+function setCachedInventory(householdId, items) {
+  try {
+    localStorage.setItem(`${INVENTORY_CACHE_KEY}_${householdId}`, JSON.stringify(items))
+  } catch {
+    // localStorage plein ou indisponible
+  }
+}
+
 export default function InventoryPage() {
   const { profile } = useAuth()
   const { t } = useLanguage()
   const { registerContextProvider } = useMiam()
-  const [items, setItems] = useState([])
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [items, setItems] = useState(() => getCachedInventory(profile?.household_id))
   const [category, setCategory] = useState('all')
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
   const [consumingItem, setConsumingItem] = useState(null)
   const [scanResults, setScanResults] = useState(null)
   const [receiptTotal, setReceiptTotal] = useState(null)
+  const [pendingScanData, setPendingScanData] = useState(null)
+  const [verifyingPrices, setVerifyingPrices] = useState(false)
 
   // Phase 4: Selection mode
   const [selectionMode, setSelectionMode] = useState(false)
@@ -73,6 +99,14 @@ export default function InventoryPage() {
     )
   }, [registerContextProvider, items])
 
+  // Handle auto-scan action from URL
+  useEffect(() => {
+    if (searchParams.get('action') === 'scan' && scanTriggerRef.current) {
+      scanTriggerRef.current()
+      setSearchParams({}) // clear params so it doesn't trigger again on reload
+    }
+  }, [searchParams, setSearchParams])
+
   useEffect(() => {
     if (!profile?.household_id) return
 
@@ -84,6 +118,7 @@ export default function InventoryPage() {
         .order('created_at', { ascending: false })
       if (data) {
         setItems(data)
+        setCachedInventory(profile.household_id, data)
         // Patch existing items missing price_per_kg or price
         for (const item of data) {
           const patched = autoPriceCalc(item)
@@ -115,7 +150,10 @@ export default function InventoryPage() {
             .select('*')
             .eq('household_id', profile.household_id)
             .order('created_at', { ascending: false })
-          if (data) setItems(data)
+          if (data) {
+            setItems(data)
+            setCachedInventory(profile.household_id, data)
+          }
         }
       )
       .subscribe()
@@ -158,6 +196,7 @@ export default function InventoryPage() {
     const consumedData = {
       household_id: item.household_id,
       name: item.name,
+      name_translations: item.name_translations || null,
       brand: item.brand || null,
       quantity: item.quantity,
       unit: item.unit,
@@ -178,8 +217,50 @@ export default function InventoryPage() {
   }
 
   const handleScanComplete = (scannedItems, scanReceiptTotal) => {
+    console.log('[InventoryPage] scanComplete:', scannedItems?.length, 'items')
+    setPendingScanData({ items: scannedItems, receiptTotal: scanReceiptTotal ?? null })
+  }
+
+  const handleStoreConfirm = async (storeName) => {
+    if (!pendingScanData) return
+    const { items: scannedItems, receiptTotal: scanReceiptTotal } = pendingScanData
+    setPendingScanData(null)
+
+    // Appliquer le magasin a tous les items
+    let finalItems = storeName
+      ? scannedItems.map(item => ({ ...item, store: storeName }))
+      : scannedItems
+
+    // Verifier les prix si un magasin est specifie et qu'il y a des items au poids
+    const hasWeightItems = finalItems.some(item =>
+      item.unit === 'kg' && ['meat', 'fish', 'vegetables', 'fruits', 'dairy'].includes(item.category)
+    )
+
+    if (storeName && hasWeightItems) {
+      setVerifyingPrices(true)
+      try {
+        const res = await apiPost('/api/verify-prices', { items: finalItems, store: storeName })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.items) finalItems = data.items
+        }
+      } catch {
+        // Fallback gracieux : on garde les items originaux
+      } finally {
+        setVerifyingPrices(false)
+      }
+    }
+
+    setScanResults(finalItems)
+    setReceiptTotal(scanReceiptTotal)
+  }
+
+  const handleStoreSkip = () => {
+    if (!pendingScanData) return
+    const { items: scannedItems, receiptTotal: scanReceiptTotal } = pendingScanData
+    setPendingScanData(null)
     setScanResults(scannedItems)
-    setReceiptTotal(scanReceiptTotal ?? null)
+    setReceiptTotal(scanReceiptTotal)
   }
 
   // Phase 1: Splitting at scan
@@ -197,6 +278,7 @@ export default function InventoryPage() {
             household_id: profile.household_id,
             added_by: profile.id,
             name: item.name,
+            name_translations: item.name_translations || null,
             brand: typeof item.brand === 'string' && item.brand.trim() ? item.brand.trim() : null,
             quantity: splitQty,
             unit: item.unit,
@@ -217,6 +299,7 @@ export default function InventoryPage() {
           household_id: profile.household_id,
           added_by: profile.id,
           name: item.name,
+          name_translations: item.name_translations || null,
           brand: typeof item.brand === 'string' && item.brand.trim() ? item.brand.trim() : null,
           quantity: item.quantity,
           unit: item.unit,
@@ -234,7 +317,14 @@ export default function InventoryPage() {
       }
     }
 
-    await supabase.from('inventory_items').insert(rows.map(autoPriceCalc))
+    const finalRows = rows.map(autoPriceCalc);
+    const { error } = await supabase.from('inventory_items').insert(finalRows)
+    
+    if (error) {
+      console.error('[InventoryPage] Erreur lors de l\'insertion du scan :', error);
+      setToastMessage("Erreur d'insertion : " + error.message)
+    }
+
     setScanResults(null)
     setReceiptTotal(null)
   }
@@ -267,7 +357,7 @@ export default function InventoryPage() {
 
 
   return (
-    <div className="fixed top-14 bottom-16 left-0 right-0 z-40 flex flex-col bg-gray-50 md:static md:z-auto md:max-w-5xl md:mx-auto md:-mt-8 md:-mb-8 md:h-[calc(100dvh-4rem)]">
+    <div className="fixed top-[74px] bottom-16 left-0 right-0 z-40 flex flex-col bg-gray-50 md:static md:z-auto md:max-w-5xl md:mx-auto md:-mt-8 md:-mb-8 md:h-[calc(100dvh-4rem)]">
       {/* Header */}
       <div className="shrink-0 px-3 pt-3 pb-2 flex items-center justify-between gap-2 min-w-0">
         <div className="flex items-center gap-1.5 min-w-0 shrink">
@@ -344,6 +434,42 @@ export default function InventoryPage() {
           onUpdateFillLevel={handleUpdateFillLevel}
           onConsumeAll={handleConsumeAll}
         />
+      )}
+
+      {pendingScanData && createPortal(
+        <StoreSelectDialog
+          onConfirm={handleStoreConfirm}
+          onSkip={handleStoreSkip}
+        />,
+        document.body
+      )}
+
+      {verifyingPrices && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl p-6 flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-gray-700 font-medium">{t('inventory.verifyingPrices')}</p>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {pendingScanData && createPortal(
+        <StoreSelectDialog
+          onConfirm={handleStoreConfirm}
+          onSkip={handleStoreSkip}
+        />,
+        document.body
+      )}
+
+      {verifyingPrices && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl p-6 flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-gray-700 font-medium">{t('inventory.verifyingPrices')}</p>
+          </div>
+        </div>,
+        document.body
       )}
 
       {scanResults && (

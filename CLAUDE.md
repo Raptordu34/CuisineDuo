@@ -7,22 +7,33 @@
 
 ## Description du projet
 
-CuisineDuo est une **Progressive Web App (PWA)** de gestion culinaire collaborative pour un foyer. Elle permet a plusieurs membres de gerer ensemble leur inventaire alimentaire, decouvrir et cuisiner des recettes, planifier les repas par un systeme de vote swipe, et communiquer via un chat integre avec un assistant IA nomme **Miam**.
+CuisineDuo est une **Progressive Web App (PWA)** de gestion culinaire collaborative pour un foyer. Elle permet a plusieurs membres de gerer ensemble leur inventaire alimentaire et de communiquer via un chat integre avec un assistant IA nomme **Miam**.
 
 L'application est concue **mobile-first**, installable, avec synchronisation temps reel entre appareils via Supabase Realtime.
+
+### Fonctionnalites actuelles
+
+- **Inventaire alimentaire** : ajout manuel, scan de ticket de caisse (OCR Gemini), saisie vocale, suivi des prix/quantites/peremption, historique de consommation
+- **Chat du foyer** : messagerie temps reel, GIFs (Giphy), reactions emoji, reponses/edition/suppression de messages, indicateurs de lecture, notifications push
+- **Assistant IA Miam** : assistant contextuel avec function calling (orchestrateur), TTS, activation vocale ("Hey Miam"), actions dynamiques par page
+- **Journaux IA** : page de debug pour les interactions IA (logs)
+- **Multilingue** : interface en francais, anglais et chinois
+
+> **Note** : Les fonctionnalites recettes, swipe/planification de repas, listes de courses, mode cuisine et profil gustatif ont ete retirees du frontend. Les tables correspondantes existent toujours en base de donnees mais ne sont plus exploitees par l'application.
 
 ---
 
 ## Stack technique
 
-- **Frontend** : React 19 + React Router 7 + Tailwind CSS 4 (via plugin Vite `@tailwindcss/vite`)
-- **Build** : Vite 7
+- **Frontend** : React 19 + React Router 7 (`react-router-dom`) + Tailwind CSS 4 (via plugin Vite `@tailwindcss/vite`)
+- **Build** : Vite 7 + `vite-plugin-pwa` (strategie `injectManifest` avec Workbox)
 - **Backend** : Vercel Serverless Functions (dossier `api/`)
-- **Base de donnees** : Supabase (PostgreSQL + Realtime + Row Level Security)
+- **Base de donnees** : Supabase (PostgreSQL + Realtime + Row Level Security + Auth)
 - **IA** : Google Gemini 2.0 Flash (`@google/generative-ai`)
-- **Notifications** : Web Push API avec cles VAPID
+- **GIFs** : Giphy API (recherche + suggestions IA)
+- **Notifications** : Web Push API avec cles VAPID (`web-push`)
 - **Voix** : Web Speech API + correction par Gemini
-- **PWA** : Service Worker (`public/sw.js`) + Web App Manifest
+- **PWA** : Service Worker (`src/sw.js` via `vite-plugin-pwa`) + Web App Manifest
 
 ---
 
@@ -32,38 +43,76 @@ L'application est concue **mobile-first**, installable, avec synchronisation tem
 
 ```
 src/
-  components/    # Composants React organises par domaine (layout/, recipes/, inventory/, swipe/, shopping/, cooking/)
-  contexts/      # AuthContext (profils) + LanguageContext (i18n FR/EN/ZH)
-  hooks/         # Hooks custom metier (useNotifications, useSwipeSession, useDictation, etc.)
-  pages/         # Un fichier par page/route
-  lib/           # supabase.js (client Supabase)
-  i18n/          # translations.js (cles de traduction)
-api/             # Fonctions serverless Vercel (une par fichier)
-public/          # Manifest PWA, Service Worker, icones
+  components/
+    chat/          # EmojiPicker, GifPicker, MessageContextMenu, ReactionBadges, ReactionBar
+    inventory/     # AddItemModal, CategoryFilter, ConsumeModal, EditItemModal, InAppCamera,
+                   # InventoryItemCard, InventoryList, ScanReceiptButton, ScanReviewItemRow,
+                   # ScanReviewModal, StoreSelectDialog
+    layout/        # Layout, Navbar, ProtectedRoute, ReloadPrompt
+    miam/          # MiamFAB (bouton flottant), MiamSheet (panneau conversationnel)
+    DictationButton.jsx    # Bouton de dictee vocale
+    DictationTrace.jsx     # Affichage visuel de la transcription en cours
+    FillLevelPicker.jsx    # Selecteur visuel de niveau de remplissage
+    LanguageSwitcher.jsx   # Selecteur de langue (FR/EN/ZH)
+  contexts/
+    AuthContext.jsx            # Authentification Supabase Auth (email/password, JWT, profil)
+    LanguageContext.jsx        # Internationalisation (FR/EN/ZH)
+    MiamContext.jsx            # Etat de l'assistant Miam (conversation, TTS, wake word, actions)
+    UnreadMessagesContext.jsx  # Suivi des messages non lus et statuts de lecture
+  hooks/
+    useDictation.js          # Reconnaissance vocale + correction IA
+    useLongPress.js          # Geste long press pour menu contextuel
+    useMessageReactions.js   # Gestion des reactions emoji sur les messages
+    useMiamActions.js        # Enregistrement d'actions Miam par page
+    useNotifications.js      # Abonnement et envoi de notifications push
+    useOnlineStatus.js       # Detection du statut en ligne/hors ligne
+    useWakeWord.js           # Activation vocale "Hey Miam"
+  pages/
+    AILogsPage.jsx       # Page de debug des logs IA
+    ChatPage.jsx         # Chat du foyer
+    HomePage.jsx         # Tableau de bord
+    InventoryPage.jsx    # Gestion des stocks
+    LoginPage.jsx        # Connexion (email/password)
+    OnboardingPage.jsx   # Creation/rejoindre un foyer
+  lib/
+    supabase.js    # Client Supabase
+    apiClient.js   # Fetch wrapper authentifie (JWT Bearer token)
+    aiLogger.js    # Logging silencieux des interactions IA vers la table ai_logs
+  i18n/
+    translations.js   # Cles de traduction multilingues
+api/                   # Fonctions serverless Vercel (une par fichier)
+public/                # Manifest PWA, icones
+sql_history/           # Historique des migrations SQL
 ```
 
 ### Conventions de nommage
 
-- **Composants** : PascalCase, extension `.jsx` (ex: `RecipeDetailPage.jsx`)
-- **Hooks** : camelCase avec prefixe `use`, extension `.js` (ex: `useSwipeSession.js`)
+- **Composants** : PascalCase, extension `.jsx` (ex: `InventoryItemCard.jsx`)
+- **Hooks** : camelCase avec prefixe `use`, extension `.js` (ex: `useDictation.js`)
 - **Fichiers API** : kebab-case, extension `.js` (ex: `chat-ai.js`)
 - **CSS** : Classes utilitaires Tailwind directement dans le JSX, pas de fichiers CSS par composant
 
 ### Gestion d'etat
 
 - **React Context API** uniquement (pas de Redux/Zustand)
-- `AuthContext` : profil courant, stocke en `localStorage` sous la cle `'profileId'`
+- `AuthContext` : authentification Supabase Auth, profil courant cache en `localStorage` sous `'cuisineduo_cached_profile'`
 - `LanguageContext` : langue courante (`'fr'`/`'en'`/`'zh'`), stockee en `localStorage` sous `'lang'`
+- `MiamContext` : etat de l'assistant Miam (conversation, TTS, wake word), historique persiste en `localStorage` par foyer
+- `UnreadMessagesContext` : compteur de messages non lus, statuts de lecture par membre
 - Etat local avec `useState`/`useEffect` dans les composants
-- **Supabase Realtime** pour la synchronisation inter-appareils (messages, votes, inventaire)
+- **Supabase Realtime** pour la synchronisation inter-appareils (messages, reactions, statuts de lecture, inventaire)
 
 ### Authentification
 
-Systeme simplifie par **selection de profil** (sans mot de passe) :
-1. L'utilisateur choisit un profil sur `LoginPage`
-2. Le `profileId` est sauvegarde dans `localStorage`
-3. `AuthContext` fournit l'objet `profile` avec `id`, `display_name`, `household_id`
-4. `ProtectedRoute` redirige vers `/login` si pas de profil, vers `/onboarding` si pas de `household_id`
+Systeme d'authentification complet via **Supabase Auth** :
+1. L'utilisateur se connecte avec email et mot de passe sur `LoginPage` (`supabase.auth.signInWithPassword`)
+2. Inscription via `supabase.auth.signUp` avec `display_name` en metadata
+3. `profiles.id = auth.uid()` — le profil est lie a l'utilisateur Supabase
+4. JWT automatiquement gere par le client Supabase, envoye aux API via `apiClient.js` (`Authorization: Bearer <token>`)
+5. Profil cache en `localStorage` pour affichage instantane, synchronise en arriere-plan
+6. `ProtectedRoute` redirige vers `/login` si pas de session, vers `/onboarding` si pas de `household_id`
+7. Les policies RLS utilisent `auth.uid()` et la fonction `auth_user_household_id()`
+8. Support de `resetPasswordForEmail` pour la reinitialisation du mot de passe
 
 ### Internationalisation
 
@@ -82,22 +131,18 @@ Toutes les routes sont definies dans `src/App.jsx` :
 |-------|------|--------|-------|
 | `/login` | LoginPage | Non | Publique |
 | `/onboarding` | OnboardingPage | Non | Publique |
-| `/` | HomePage | Oui | Dashboard |
-| `/inventory` | InventoryPage | Oui | |
-| `/recipes` | RecipesPage | Oui | |
-| `/recipes/:id` | RecipeDetailPage | Oui | |
-| `/recipes/:id/cook` | CookingModePage | **Non** | Plein ecran |
-| `/profile` | TasteProfilePage | Oui | |
-| `/chat` | ChatPage | Oui | |
-| `/shopping` | ShoppingListPage | Oui | |
-| `/swipe/:sessionId` | SwipePage | **Non** | Plein ecran |
-| `/swipe/:sessionId/results` | SwipeResultsPage | Oui | |
+| `/` | HomePage | Oui | Dashboard, protegee |
+| `/inventory` | InventoryPage | Oui | Gestion des stocks, protegee |
+| `/chat` | ChatPage | Oui | Chat du foyer, protegee |
+| `/ai-logs` | AILogsPage | **Non** | Debug IA, protegee (pas de Layout) |
 
 Le `Layout` inclut la `Navbar` (barre de navigation mobile en bas + barre desktop en haut) et un conteneur `max-w-5xl`.
 
+L'arbre de providers est : `BrowserRouter > LanguageProvider > AuthProvider > UnreadMessagesProvider > MiamProvider`.
+
 ---
 
-## Pattern des fonctions API serverless
+## Fonctions API serverless
 
 Chaque fichier dans `api/` exporte un `default handler(req, res)` avec cette structure :
 
@@ -106,7 +151,7 @@ export default async function handler(req, res) {
   // 1. CORS
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   if (req.method === 'OPTIONS') return res.status(200).end()
 
   // 2. Validation methode
@@ -129,6 +174,20 @@ export default async function handler(req, res) {
 }
 ```
 
+### Endpoints disponibles
+
+| Endpoint | Description |
+|----------|-------------|
+| `/api/miam-orchestrator` | Orchestrateur IA Miam avec function calling (actions contextuelles) |
+| `/api/chat-ai` | Chat IA du foyer (legacy, encore present) |
+| `/api/scan-receipt` | OCR de ticket de caisse ou photo d'aliments via Gemini |
+| `/api/correct-transcription` | Correction IA d'une transcription vocale |
+| `/api/verify-prices` | Verification IA des prix pour les articles au poids |
+| `/api/gif-search` | Recherche et trending de GIFs via Giphy API |
+| `/api/gif-suggest` | Suggestions de requetes GIF par Gemini + recherche Giphy |
+| `/api/send-notification` | Envoi d'une notification push au foyer |
+| `/api/subscribe-push` | Enregistrement/suppression d'un abonnement push |
+
 **Integration Gemini** :
 ```javascript
 import { GoogleGenerativeAI } from '@google/generative-ai'
@@ -142,19 +201,21 @@ Toutes les methodes sont **POST**. Les reponses d'erreur suivent le format `{ er
 
 ## Base de donnees (Supabase) — Schema complet
 
-Le SQL source est dans `archivesqleditor/CuisineDuo_Full_Schema_&_RLS.sql`.
+Le SQL source est dans le dossier `sql_history/` (migrations successives).
 Les requetes utilisent directement le client `supabase` importe depuis `src/lib/supabase.js`.
 
 ### Regles generales
 
 - **Toutes les donnees sont scopees par `household_id`** — c'est le critere de partage entre membres d'un foyer
-- **RLS (Row Level Security)** active sur toutes les tables — les policies verifient l'appartenance au foyer via une sous-requete sur `profiles`
-- **Supabase Realtime** active sur : `inventory_items`, `messages`, `recipes`, `recipe_comments`, `swipe_sessions`, `swipe_votes`, `shopping_list_items`
+- **RLS (Row Level Security)** active sur toutes les tables — les policies utilisent `auth.uid()` et `auth_user_household_id()`
+- **Supabase Realtime** active sur : `inventory_items`, `messages`, `message_reactions`, `chat_read_status`
 - Toutes les PK sont `UUID` avec `gen_random_uuid()`
 - Toutes les tables ont un champ `created_at TIMESTAMPTZ default now()`
-- **Storage** : bucket `recipe-images` avec policies publiques (lecture, upload, modification, suppression)
+- **Storage** : bucket `recipe-images` avec policies publiques
 
-### 1. households
+### Tables actives (utilisees par le frontend)
+
+#### 1. households
 
 Foyer = unite de partage de toutes les donnees.
 
@@ -165,49 +226,18 @@ Foyer = unite de partage de toutes les donnees.
 | `invite_code` | TEXT | UNIQUE, auto-genere (6 caracteres hex) |
 | `created_at` | TIMESTAMPTZ | default now() |
 
-RLS : ouvert (anyone can read/create/update).
+#### 2. profiles
 
-### 2. profiles
-
-Membres d'un foyer. Pas d'authentification par mot de passe.
+Membres d'un foyer. Lies a `auth.users` via `id = auth.uid()`.
 
 | Colonne | Type | Contraintes |
 |---------|------|-------------|
-| `id` | UUID | PK |
+| `id` | UUID | PK, = auth.uid() |
 | `display_name` | TEXT | NOT NULL |
 | `household_id` | UUID | FK → households(id) ON DELETE SET NULL |
 | `created_at` | TIMESTAMPTZ | default now() |
 
-RLS : ouvert (anyone can CRUD).
-
-### 3. recipes
-
-Recettes du foyer. Les champs `equipment`, `ingredients`, `steps`, `tips` sont des tableaux JSON.
-
-| Colonne | Type | Contraintes |
-|---------|------|-------------|
-| `id` | UUID | PK |
-| `household_id` | UUID | FK → households(id) ON DELETE CASCADE, NOT NULL |
-| `created_by` | UUID | FK → profiles(id) ON DELETE CASCADE, NOT NULL |
-| `name` | TEXT | NOT NULL |
-| `description` | TEXT | |
-| `category` | TEXT | |
-| `servings` | SMALLINT | |
-| `prep_time` | SMALLINT | en minutes |
-| `cook_time` | SMALLINT | en minutes |
-| `difficulty` | TEXT | |
-| `equipment` | JSONB | default `[]` |
-| `ingredients` | JSONB | default `[]` |
-| `steps` | JSONB | default `[]` |
-| `tips` | JSONB | default `[]` |
-| `image_url` | TEXT | |
-| `image_source` | TEXT | default `'none'` |
-| `created_at` | TIMESTAMPTZ | default now() |
-| `updated_at` | TIMESTAMPTZ | default now() |
-
-RLS : scope par `household_id` (CRUD pour les membres du foyer).
-
-### 4. inventory_items
+#### 3. inventory_items
 
 Stock alimentaire actuel du foyer.
 
@@ -231,9 +261,7 @@ Stock alimentaire actuel du foyer.
 | `notes` | TEXT | |
 | `created_at` | TIMESTAMPTZ | default now() |
 
-RLS : scope par `household_id`.
-
-### 5. consumed_items
+#### 4. consumed_items
 
 Historique des articles consommes (copies depuis `inventory_items` a la consommation).
 
@@ -258,11 +286,9 @@ Historique des articles consommes (copies depuis `inventory_items` a la consomma
 | `fill_level` | SMALLINT | default 1 |
 | `created_at` | TIMESTAMPTZ | default now() |
 
-RLS : scope par `household_id`.
+#### 5. messages
 
-### 6. messages
-
-Chat du foyer. Les messages de l'IA Miam ont `is_ai = true`.
+Chat du foyer. Supporte texte, GIFs, reponses, edition et suppression douce.
 
 | Colonne | Type | Contraintes |
 |---------|------|-------------|
@@ -271,25 +297,44 @@ Chat du foyer. Les messages de l'IA Miam ont `is_ai = true`.
 | `profile_id` | UUID | FK → profiles, NOT NULL |
 | `content` | TEXT | NOT NULL |
 | `is_ai` | BOOLEAN | default false |
+| `message_type` | TEXT | default `'text'` (valeurs : `'text'`, `'gif'`) |
+| `media_url` | TEXT | URL du GIF |
+| `gif_title` | TEXT | Titre du GIF |
+| `giphy_id` | TEXT | Identifiant Giphy |
+| `reply_to_id` | UUID | FK → messages(id), pour les reponses |
+| `edited_at` | TIMESTAMPTZ | Date de derniere edition |
+| `deleted_at` | TIMESTAMPTZ | Suppression douce (soft delete) |
 | `created_at` | TIMESTAMPTZ | default now() |
 
-RLS : scope par `household_id`.
+#### 6. message_reactions
 
-### 7. recipe_comments
-
-Commentaires sur les recettes.
+Reactions emoji sur les messages du chat.
 
 | Colonne | Type | Contraintes |
 |---------|------|-------------|
 | `id` | UUID | PK |
-| `recipe_id` | UUID | FK → recipes(id) ON DELETE CASCADE, NOT NULL |
-| `profile_id` | UUID | FK → profiles, NOT NULL |
-| `content` | TEXT | NOT NULL |
+| `message_id` | UUID | FK → messages(id) ON DELETE CASCADE, NOT NULL |
+| `profile_id` | UUID | FK → profiles(id) ON DELETE CASCADE, NOT NULL |
+| `emoji` | TEXT | NOT NULL |
 | `created_at` | TIMESTAMPTZ | default now() |
 
-RLS : scope par `recipe_id` (via sous-requete sur recipes).
+Contrainte UNIQUE sur `(message_id, profile_id, emoji)`. Realtime active.
 
-### 8. push_subscriptions
+#### 7. chat_read_status
+
+Suivi du statut de lecture du chat par membre.
+
+| Colonne | Type | Contraintes |
+|---------|------|-------------|
+| `id` | UUID | PK |
+| `profile_id` | UUID | FK → profiles(id) ON DELETE CASCADE, NOT NULL |
+| `household_id` | UUID | FK → households(id) ON DELETE CASCADE, NOT NULL |
+| `last_read_at` | TIMESTAMPTZ | NOT NULL, default now() |
+| `created_at` | TIMESTAMPTZ | default now() |
+
+Contrainte UNIQUE sur `(profile_id, household_id)`. Realtime active.
+
+#### 8. push_subscriptions
 
 Abonnements aux notifications push par appareil.
 
@@ -302,207 +347,43 @@ Abonnements aux notifications push par appareil.
 | `created_at` | TIMESTAMPTZ | default now() |
 
 Index unique sur `(profile_id, subscription->>'endpoint')`.
-RLS : lecture scope par `household_id`, ecriture/suppression ouverte.
 
-### 9. swipe_sessions
+#### 9. ai_logs
 
-Sessions de planification de repas par vote.
-
-| Colonne | Type | Contraintes |
-|---------|------|-------------|
-| `id` | UUID | PK |
-| `household_id` | UUID | FK → households, NOT NULL |
-| `created_by` | UUID | FK → profiles, NOT NULL |
-| `title` | TEXT | NOT NULL, default `''` |
-| `meal_count` | SMALLINT | NOT NULL, default 7 |
-| `meal_types` | TEXT[] | NOT NULL, default `'{}'` |
-| `status` | TEXT | NOT NULL, default `'generating'`, CHECK in (`generating`, `voting`, `completed`, `cancelled`) |
-| `created_at` | TIMESTAMPTZ | default now() |
-| `updated_at` | TIMESTAMPTZ | default now() |
-
-RLS : scope par `household_id`.
-
-### 10. swipe_session_recipes
-
-Recettes proposees dans une session de swipe. Peut etre liee a une recette existante ou etre une suggestion IA.
+Logs des interactions IA pour debug.
 
 | Colonne | Type | Contraintes |
 |---------|------|-------------|
 | `id` | UUID | PK |
-| `session_id` | UUID | FK → swipe_sessions, NOT NULL |
-| `recipe_id` | UUID | FK → recipes, ON DELETE SET NULL (nullable) |
-| `name` | TEXT | NOT NULL |
-| `description` | TEXT | |
-| `category` | TEXT | |
-| `image_url` | TEXT | |
-| `difficulty` | TEXT | |
-| `prep_time` | SMALLINT | |
-| `cook_time` | SMALLINT | |
-| `servings` | SMALLINT | |
-| `ai_recipe_data` | JSONB | donnees completes de la recette generee par l'IA |
-| `is_existing_recipe` | BOOLEAN | NOT NULL, default false |
-| `sort_order` | SMALLINT | NOT NULL, default 0 |
+| `household_id` | UUID | FK → households(id) ON DELETE CASCADE |
+| `profile_id` | UUID | FK → profiles(id) ON DELETE SET NULL |
+| `endpoint` | TEXT | NOT NULL (ex: `'miam-orchestrator'`, `'scan-receipt'`) |
+| `input` | JSONB | Donnees envoyees a l'IA |
+| `output` | JSONB | Reponse recue |
+| `duration_ms` | INTEGER | Duree de l'appel en ms |
+| `error` | TEXT | Message d'erreur si echec |
 | `created_at` | TIMESTAMPTZ | default now() |
 
-RLS : scope par `session_id` (via sous-requete sur swipe_sessions).
+### Tables legacy (en base mais non utilisees par le frontend)
 
-### 11. swipe_votes
+Les tables suivantes existent en base de donnees mais ne sont plus exploitees par le frontend actuel :
 
-Vote individuel d'un membre sur une recette proposee.
+`recipes`, `recipe_comments`, `recipe_taste_params`, `recipe_ratings`, `cooking_history`, `taste_preferences`, `swipe_sessions`, `swipe_session_recipes`, `swipe_votes`, `shopping_lists`, `shopping_list_items`
 
-| Colonne | Type | Contraintes |
-|---------|------|-------------|
-| `id` | UUID | PK |
-| `session_recipe_id` | UUID | FK → swipe_session_recipes, NOT NULL |
-| `profile_id` | UUID | FK → profiles, NOT NULL |
-| `vote` | BOOLEAN | NOT NULL (true = like, false = dislike) |
-| `created_at` | TIMESTAMPTZ | default now() |
-
-Contrainte UNIQUE sur `(session_recipe_id, profile_id)`.
-RLS : scope par `session_recipe_id` (via sous-requete sur swipe_session_recipes).
-
-### 12. shopping_lists
-
-Listes de courses, optionnellement liees a une session de swipe.
-
-| Colonne | Type | Contraintes |
-|---------|------|-------------|
-| `id` | UUID | PK |
-| `household_id` | UUID | FK → households, NOT NULL |
-| `name` | TEXT | NOT NULL, default `''` |
-| `session_id` | UUID | FK → swipe_sessions, ON DELETE SET NULL (nullable) |
-| `status` | TEXT | NOT NULL, default `'active'`, CHECK in (`active`, `completed`, `archived`) |
-| `created_by` | UUID | FK → profiles, NOT NULL |
-| `created_at` | TIMESTAMPTZ | default now() |
-| `updated_at` | TIMESTAMPTZ | default now() |
-
-RLS : scope par `household_id`.
-
-### 13. shopping_list_items
-
-Elements d'une liste de courses.
-
-| Colonne | Type | Contraintes |
-|---------|------|-------------|
-| `id` | UUID | PK |
-| `list_id` | UUID | FK → shopping_lists, NOT NULL |
-| `name` | TEXT | NOT NULL |
-| `quantity` | NUMERIC | |
-| `unit` | TEXT | |
-| `category` | TEXT | |
-| `recipe_name` | TEXT | recette d'origine (informatif) |
-| `checked` | BOOLEAN | NOT NULL, default false |
-| `checked_by` | UUID | FK → profiles, ON DELETE SET NULL |
-| `checked_at` | TIMESTAMPTZ | |
-| `notes` | TEXT | |
-| `sort_order` | SMALLINT | NOT NULL, default 0 |
-| `created_at` | TIMESTAMPTZ | default now() |
-
-RLS : scope par `list_id` (via sous-requete sur shopping_lists).
-
-### 14. cooking_history
-
-Historique des recettes cuisinees.
-
-| Colonne | Type | Contraintes |
-|---------|------|-------------|
-| `id` | UUID | PK |
-| `recipe_id` | UUID | FK → recipes, NOT NULL |
-| `household_id` | UUID | FK → households, NOT NULL |
-| `cooked_by` | UUID | FK → profiles, NOT NULL |
-| `cooked_at` | TIMESTAMPTZ | NOT NULL, default now() |
-| `notes` | TEXT | |
-| `servings_cooked` | SMALLINT | |
-| `created_at` | TIMESTAMPTZ | default now() |
-
-RLS : scope par `household_id`.
-
-### 15. recipe_taste_params
-
-Profil gustatif d'une recette (7 axes, echelle 1-5).
-
-| Colonne | Type | Contraintes |
-|---------|------|-------------|
-| `id` | UUID | PK |
-| `recipe_id` | UUID | FK → recipes, NOT NULL, UNIQUE |
-| `sweetness` | SMALLINT | CHECK 1-5 |
-| `saltiness` | SMALLINT | CHECK 1-5 |
-| `spiciness` | SMALLINT | CHECK 1-5 |
-| `acidity` | SMALLINT | CHECK 1-5 |
-| `bitterness` | SMALLINT | CHECK 1-5 |
-| `umami` | SMALLINT | CHECK 1-5 |
-| `richness` | SMALLINT | CHECK 1-5 |
-| `created_at` | TIMESTAMPTZ | default now() |
-| `updated_at` | TIMESTAMPTZ | default now() |
-
-RLS : scope par `recipe_id` (via sous-requete sur recipes).
-
-### 16. recipe_ratings
-
-Notes individuelles sur les recettes (1-5 etoiles).
-
-| Colonne | Type | Contraintes |
-|---------|------|-------------|
-| `id` | UUID | PK |
-| `recipe_id` | UUID | FK → recipes, NOT NULL |
-| `profile_id` | UUID | FK → profiles, NOT NULL |
-| `rating` | SMALLINT | NOT NULL, CHECK 1-5 |
-| `created_at` | TIMESTAMPTZ | default now() |
-| `updated_at` | TIMESTAMPTZ | default now() |
-
-Contrainte UNIQUE sur `(recipe_id, profile_id)`.
-RLS : scope par `recipe_id` (via sous-requete sur recipes).
-
-### 17. taste_preferences
-
-Preferences gustatives personnelles d'un membre (memes 7 axes que recipe_taste_params).
-
-| Colonne | Type | Contraintes |
-|---------|------|-------------|
-| `id` | UUID | PK |
-| `profile_id` | UUID | FK → profiles, NOT NULL, UNIQUE |
-| `sweetness` | SMALLINT | CHECK 1-5 |
-| `saltiness` | SMALLINT | CHECK 1-5 |
-| `spiciness` | SMALLINT | CHECK 1-5 |
-| `acidity` | SMALLINT | CHECK 1-5 |
-| `bitterness` | SMALLINT | CHECK 1-5 |
-| `umami` | SMALLINT | CHECK 1-5 |
-| `richness` | SMALLINT | CHECK 1-5 |
-| `notes` | TEXT | |
-| `created_at` | TIMESTAMPTZ | default now() |
-| `updated_at` | TIMESTAMPTZ | default now() |
-
-RLS : ouvert (anyone can CRUD).
-
-### Relations cles (resume)
+### Relations cles (tables actives)
 
 ```
 households 1──N profiles
-households 1──N recipes
 households 1──N inventory_items
 households 1──N consumed_items
 households 1──N messages
-households 1──N swipe_sessions
-households 1──N shopping_lists
-households 1──N cooking_history
 households 1──N push_subscriptions
+households 1──N ai_logs
 
-profiles 1──1 taste_preferences
-profiles 1──N recipe_ratings
-profiles 1──N recipe_comments
-profiles 1──N swipe_votes
+profiles 1──1 chat_read_status (par foyer)
 
-recipes 1──1 recipe_taste_params
-recipes 1──N recipe_comments
-recipes 1──N recipe_ratings
-recipes 1──N cooking_history
-
-swipe_sessions 1──N swipe_session_recipes
-swipe_session_recipes 1──N swipe_votes
-swipe_session_recipes N──1 recipes (nullable, pour recettes existantes)
-
-shopping_lists 1──N shopping_list_items
-shopping_lists N──1 swipe_sessions (nullable)
+messages 1──N message_reactions
+messages N──1 messages (reply_to_id, auto-reference)
 ```
 
 ---
@@ -516,6 +397,7 @@ shopping_lists N──1 swipe_sessions (nullable)
 | `VITE_VAPID_PUBLIC_KEY` | Client | Cle publique VAPID pour le push |
 | `GEMINI_API_KEY` | Serveur | Cle API Gemini principale |
 | `GEMINI_SCAN_API_KEY` | Serveur | Cle API Gemini pour le scan |
+| `GIPHY_API_KEY` | Serveur | Cle API Giphy pour les GIFs |
 | `VAPID_PRIVATE_KEY` | Serveur | Cle privee VAPID |
 
 Les variables `VITE_*` sont exposees cote client via Vite. Les autres ne sont accessibles que dans les fonctions `api/`.
@@ -540,7 +422,7 @@ Le serveur API local (`api-dev-server.js`) charge dynamiquement tous les fichier
 ## Deploiement
 
 - Heberge sur **Vercel**
-- Configuration dans `vercel.json` : rewrites pour les routes API et SPA fallback
+- Configuration dans `vercel.json` : cache headers (assets immutables, index.html no-cache), rewrites pour les routes API et SPA fallback
 - Les fonctions `api/` sont deployees automatiquement comme Vercel Serverless Functions
 - La branche principale est `main`
 
@@ -557,3 +439,21 @@ Le serveur API local (`api-dev-server.js`) charge dynamiquement tous les fichier
 - **Styling** : Tailwind CSS uniquement via classes utilitaires dans le JSX
 - **Couleur primaire** : orange (`#f97316` / classes `orange-500`)
 - **Couleur secondaire IA** : indigo (`#6366f1` / classes `indigo-*`) pour les elements lies a l'IA
+
+## Historique des migrations SQL
+
+Les fichiers dans `sql_history/` documentent l'evolution du schema :
+
+| Fichier | Description |
+|---------|-------------|
+| `init_schema.sql` | Schema initial complet (toutes les tables) |
+| `drop_all_tables.sql` | Suppression de toutes les tables |
+| `storage_policies.sql` | Policies du bucket `recipe-images` |
+| `check_realtime_config.sql` | Verification de la config Realtime |
+| `add_chat_read_status.sql` | Table `chat_read_status` |
+| `add_reactions.sql` | Table `message_reactions` |
+| `add_reply_edit_delete.sql` | Colonnes `reply_to_id`, `deleted_at`, `edited_at` sur `messages` |
+| `add_gifs.sql` | Colonnes `message_type`, `media_url` sur `messages` |
+| `add_gif_metadata.sql` | Colonnes `gif_title`, `giphy_id` sur `messages` |
+| `add_ai_logs.sql` | Table `ai_logs` |
+| `migrate_to_supabase_auth.sql` | Migration vers Supabase Auth (RLS avec `auth.uid()`) |

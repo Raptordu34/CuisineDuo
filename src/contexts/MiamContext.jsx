@@ -6,12 +6,14 @@ import { supabase } from '../lib/supabase'
 import { apiPost } from '../lib/apiClient'
 import { logAI } from '../lib/aiLogger'
 import { useWakeWord } from '../hooks/useWakeWord'
+import { useVoiceChat } from '../hooks/useVoiceChat'
 
 const MiamContext = createContext(null)
 
 const PAGE_MAP = {
   '/': 'home',
   '/inventory': 'inventory',
+  '/recipes': 'recipes',
   '/chat': 'chat',
 }
 
@@ -54,6 +56,34 @@ export function MiamProvider({ children }) {
 
   // ID du dernier message envoyé par Miam dans le chat du foyer
   const lastSentMessageIdRef = useRef(null)
+
+  // Voice chat mode
+  const [voiceChatActive, setVoiceChatActive] = useState(false)
+  const voiceChatActiveRef = useRef(false)
+  const [isSpeaking, setIsSpeaking] = useState(false)
+  const isSpeakingRef = useRef(false)
+  const sendMessageRef = useRef(null)
+  const voiceChatFnsRef = useRef({})
+
+  // Voice chat utterance handler (utilise sendMessageRef pour éviter la dépendance circulaire)
+  const handleVoiceChatUtterance = useCallback((text) => {
+    sendMessageRef.current?.(text)
+  }, [])
+
+  const voiceChat = useVoiceChat({
+    onUtterance: handleVoiceChatUtterance,
+    lang,
+  })
+
+  // Synchroniser les refs du voice chat
+  useEffect(() => {
+    voiceChatFnsRef.current = {
+      start: voiceChat.start,
+      stop: voiceChat.stop,
+      enterSpeaking: voiceChat.enterSpeaking,
+      resumeListening: voiceChat.resumeListening,
+    }
+  }, [voiceChat.start, voiceChat.stop, voiceChat.enterSpeaking, voiceChat.resumeListening])
 
   // Fetch des membres du foyer + chargement historique depuis localStorage
   useEffect(() => {
@@ -124,9 +154,17 @@ export function MiamProvider({ children }) {
     return Object.keys(actionsRef.current)
   }, [])
 
-  // TTS
+  // TTS — amélioré avec support conversation vocale
   const speak = useCallback((text) => {
-    if (!ttsEnabled || !window.speechSynthesis) return
+    // En mode conversation vocale, toujours parler. Sinon respecter le toggle TTS.
+    const shouldSpeak = voiceChatActiveRef.current || ttsEnabled
+    if (!shouldSpeak || !window.speechSynthesis) {
+      // Si conversation vocale active mais synth indisponible, reprendre l'écoute
+      if (voiceChatActiveRef.current) {
+        voiceChatFnsRef.current.resumeListening?.()
+      }
+      return
+    }
     window.speechSynthesis.cancel()
     const utterance = new SpeechSynthesisUtterance(text)
     const langMap = { fr: 'fr-FR', en: 'en-US', zh: 'zh-CN' }
@@ -136,6 +174,32 @@ export function MiamProvider({ children }) {
     const voices = window.speechSynthesis.getVoices()
     const preferred = voices.find(v => v.lang.startsWith(utterance.lang) && v.localService)
     if (preferred) utterance.voice = preferred
+
+    isSpeakingRef.current = true
+    setIsSpeaking(true)
+
+    // Notifier le voice chat qu'on entre en phase speaking (coupe le micro)
+    if (voiceChatActiveRef.current) {
+      voiceChatFnsRef.current.enterSpeaking?.()
+    }
+
+    utterance.onend = () => {
+      isSpeakingRef.current = false
+      setIsSpeaking(false)
+      // Reprendre l'écoute en conversation vocale après la fin du TTS
+      if (voiceChatActiveRef.current) {
+        voiceChatFnsRef.current.resumeListening?.()
+      }
+    }
+
+    utterance.onerror = () => {
+      isSpeakingRef.current = false
+      setIsSpeaking(false)
+      if (voiceChatActiveRef.current) {
+        voiceChatFnsRef.current.resumeListening?.()
+      }
+    }
+
     window.speechSynthesis.speak(utterance)
   }, [ttsEnabled, lang])
 
@@ -154,6 +218,27 @@ export function MiamProvider({ children }) {
       return next
     })
   }, [])
+
+  // Arrêter le TTS
+  const stopSpeaking = useCallback(() => {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel()
+    }
+    if (isSpeakingRef.current) {
+      isSpeakingRef.current = false
+      setIsSpeaking(false)
+    }
+  }, [])
+
+  // Interrompre le TTS et reprendre l'écoute (barge-in par tap)
+  const interruptSpeaking = useCallback(() => {
+    stopSpeaking()
+    if (voiceChatActiveRef.current) {
+      setTimeout(() => {
+        voiceChatFnsRef.current.resumeListening?.()
+      }, 200)
+    }
+  }, [stopSpeaking])
 
   // Execute action
   const executeAction = useCallback(async (action) => {
@@ -213,6 +298,7 @@ export function MiamProvider({ children }) {
         household_id: profile.household_id,
         added_by: profile.id,
         name: args.name,
+        name_translations: args.name_translations || null,
         quantity: args.quantity ?? 1,
         unit: args.unit ?? 'piece',
         category: args.category ?? 'other',
@@ -258,6 +344,7 @@ export function MiamProvider({ children }) {
       await supabase.from('consumed_items').insert({
         household_id: item.household_id,
         name: item.name,
+        name_translations: item.name_translations || null,
         brand: item.brand || null,
         quantity: item.quantity,
         unit: item.unit,
@@ -289,6 +376,130 @@ export function MiamProvider({ children }) {
       if (!item) return { success: false, error: `Item "${args.name}" not found` }
       const { error } = await supabase.from('inventory_items').delete().eq('id', item.id)
       return error ? { success: false, error: error.message } : { success: true }
+    }
+
+    // --- Recettes built-in handlers ---
+
+    // Utilitaire fuzzy match pour recettes
+    const findRecipe = async (recipeName) => {
+      if (!profile?.household_id) return null
+      const { data } = await supabase
+        .from('recipes')
+        .select('id, name, steps, tips')
+        .eq('household_id', profile.household_id)
+      if (!data?.length) return null
+      const nameLower = recipeName.toLowerCase()
+      return data.find(r => r.name.toLowerCase().includes(nameLower))
+        || data.find(r => nameLower.includes(r.name.toLowerCase()))
+    }
+
+    // Built-in: addRecipe
+    if (name === 'addRecipe') {
+      if (!profile?.household_id || !profile?.id) return { success: false, error: 'No profile' }
+      const { error } = await supabase.from('recipes').insert({
+        household_id: profile.household_id,
+        created_by: profile.id,
+        name: args.name,
+        description: args.description || null,
+        category: args.category || 'other',
+        difficulty: args.difficulty || 'medium',
+        prep_time: args.prep_time || null,
+        cook_time: args.cook_time || null,
+        servings: args.servings || null,
+        ingredients: args.ingredients || [],
+        steps: args.steps || [],
+        equipment: args.equipment || [],
+        tips: args.tips || [],
+      })
+      return error ? { success: false, error: error.message } : { success: true }
+    }
+
+    // Built-in: deleteRecipe
+    if (name === 'deleteRecipe') {
+      const recipe = await findRecipe(args.name)
+      if (!recipe) return { success: false, error: `Recipe "${args.name}" not found` }
+      const { error } = await supabase.from('recipes').delete().eq('id', recipe.id)
+      return error ? { success: false, error: error.message } : { success: true }
+    }
+
+    // Built-in: rateRecipe
+    if (name === 'rateRecipe') {
+      if (!profile?.id) return { success: false, error: 'No profile' }
+      const recipe = await findRecipe(args.name)
+      if (!recipe) return { success: false, error: `Recipe "${args.name}" not found` }
+      const rating = Math.min(5, Math.max(1, Math.round(args.rating)))
+      const { error } = await supabase.from('recipe_ratings').upsert({
+        recipe_id: recipe.id,
+        profile_id: profile.id,
+        rating,
+      }, { onConflict: 'recipe_id,profile_id' })
+      return error ? { success: false, error: error.message } : { success: true }
+    }
+
+    // Built-in: addRecipeComment
+    if (name === 'addRecipeComment') {
+      if (!profile?.id) return { success: false, error: 'No profile' }
+      const recipe = await findRecipe(args.name)
+      if (!recipe) return { success: false, error: `Recipe "${args.name}" not found` }
+      const { error } = await supabase.from('recipe_comments').insert({
+        recipe_id: recipe.id,
+        profile_id: profile.id,
+        content: args.content,
+      })
+      return error ? { success: false, error: error.message } : { success: true }
+    }
+
+    // Built-in: updateRecipeStep
+    if (name === 'updateRecipeStep') {
+      const recipe = await findRecipe(args.name)
+      if (!recipe) return { success: false, error: `Recipe "${args.name}" not found` }
+      const steps = Array.isArray(recipe.steps) ? [...recipe.steps] : []
+      if (args.stepIndex < 0 || args.stepIndex >= steps.length) return { success: false, error: 'Invalid step index' }
+      steps[args.stepIndex] = { ...steps[args.stepIndex], instruction: args.newInstruction }
+      const { error } = await supabase.from('recipes').update({ steps }).eq('id', recipe.id)
+      return error ? { success: false, error: error.message } : { success: true }
+    }
+
+    // Built-in: addRecipeTip
+    if (name === 'addRecipeTip') {
+      const recipe = await findRecipe(args.name)
+      if (!recipe) return { success: false, error: `Recipe "${args.name}" not found` }
+      const tips = Array.isArray(recipe.tips) ? [...recipe.tips, args.tip] : [args.tip]
+      const { error } = await supabase.from('recipes').update({ tips }).eq('id', recipe.id)
+      return error ? { success: false, error: error.message } : { success: true }
+    }
+
+    // Built-in: updateRecipeInfo
+    if (name === 'updateRecipeInfo') {
+      const recipe = await findRecipe(args.name)
+      if (!recipe) return { success: false, error: `Recipe "${args.name}" not found` }
+      const ALLOWED = ['name', 'description', 'category', 'difficulty', 'prep_time', 'cook_time', 'servings']
+      const payload = Object.fromEntries(
+        Object.entries(args.fields || {}).filter(([k]) => ALLOWED.includes(k))
+      )
+      if (!Object.keys(payload).length) return { success: false, error: 'No valid fields to update' }
+      const { error } = await supabase.from('recipes').update(payload).eq('id', recipe.id)
+      return error ? { success: false, error: error.message } : { success: true }
+    }
+
+    // Built-in: suggestRecipes
+    if (name === 'suggestRecipes') {
+      if (!profile?.household_id) return { success: false, error: 'No profile' }
+      const { data: inv } = await supabase
+        .from('inventory_items')
+        .select('name, quantity, unit, category, estimated_expiry_date')
+        .eq('household_id', profile.household_id)
+      try {
+        const res = await apiPost('/api/suggest-recipes', {
+          inventory: inv || [],
+          lang: lang || 'fr',
+        })
+        if (!res.ok) return { success: false, error: 'Suggestion failed' }
+        const data = await res.json()
+        return { success: true, recipes: data.recipes }
+      } catch {
+        return { success: false, error: 'Suggestion request failed' }
+      }
     }
 
     // Actions enregistrées par les pages
@@ -385,8 +596,12 @@ export function MiamProvider({ children }) {
       // TTS
       if (data.response) {
         speak(data.response)
+      } else if (voiceChatActiveRef.current) {
+        // Pas de texte de réponse — reprendre l'écoute directement
+        voiceChatFnsRef.current.resumeListening?.()
       }
     } catch (err) {
+      const errorMsg = t('miam.error')
       logAI({
         householdId: profile?.household_id,
         profileId: profile?.id,
@@ -397,15 +612,54 @@ export function MiamProvider({ children }) {
       })
       setMessages(prev => [...prev, {
         role: 'miam',
-        content: t('miam.error'),
+        content: errorMsg,
       }])
+      // En mode conversation vocale, lire l'erreur (qui reprendra l'écoute via onend)
+      if (voiceChatActiveRef.current) {
+        speak(errorMsg)
+      }
     } finally {
       setIsLoading(false)
     }
   }, [isLoading, lang, getCurrentPage, getAvailableActions, messages, profile, householdMembers, collectContext, executeAction, speak, t])
 
+  // Synchroniser sendMessageRef (doit être après la définition de sendMessage)
+  useEffect(() => {
+    sendMessageRef.current = sendMessage
+  }, [sendMessage])
+
   const openSheet = useCallback(() => setIsSheetOpen(true), [])
-  const closeSheet = useCallback(() => setIsSheetOpen(false), [])
+  const closeSheet = useCallback(() => {
+    setIsSheetOpen(false)
+    // Arrêter la conversation vocale si active
+    if (voiceChatActiveRef.current) {
+      voiceChatActiveRef.current = false
+      setVoiceChatActive(false)
+      setIsVoiceActive(false)
+      voiceChatFnsRef.current.stop?.()
+      stopSpeaking()
+    }
+  }, [stopSpeaking])
+
+  // Démarrer une conversation vocale
+  const startVoiceChat = useCallback(() => {
+    if (!voiceChat.isSupported) return
+    voiceChatActiveRef.current = true
+    setVoiceChatActive(true)
+    setIsVoiceActive(true)
+    setIsSheetOpen(true)
+    voiceChatFnsRef.current.start?.()
+  }, [voiceChat.isSupported])
+
+  // Arrêter la conversation vocale
+  const stopVoiceChat = useCallback(() => {
+    voiceChatActiveRef.current = false
+    setVoiceChatActive(false)
+    setIsVoiceActive(false)
+    voiceChatFnsRef.current.stop?.()
+    stopSpeaking()
+  }, [stopSpeaking])
+
   const clearConversation = useCallback(() => {
     setMessages([])
     if (profile?.household_id) {
@@ -430,6 +684,10 @@ export function MiamProvider({ children }) {
       wakeWordEnabled, toggleWakeWord,
       isVoiceActive, setIsVoiceActive,
       householdMembers,
+      voiceChatActive, startVoiceChat, stopVoiceChat,
+      isSpeaking, stopSpeaking, interruptSpeaking,
+      voiceChatPhase: voiceChat.phase,
+      voiceChatTranscript: voiceChat.transcript,
     }}>
       {children}
     </MiamContext.Provider>

@@ -20,12 +20,13 @@ async function getAuthHeaders() {
 /**
  * Effectue un appel POST authentifie vers une API serverless.
  */
-export async function apiPost(url, body) {
+export async function apiPost(url, body, { signal } = {}) {
   const headers = await getAuthHeaders()
   return fetch(url, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
+    ...(signal ? { signal } : {}),
   })
 }
 

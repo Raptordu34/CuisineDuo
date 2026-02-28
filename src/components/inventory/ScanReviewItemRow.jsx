@@ -8,7 +8,15 @@ const CATEGORIES = [
 const UNITS = ['piece', 'kg', 'g', 'l', 'ml', 'pack']
 
 export default function ScanReviewItemRow({ item, index, checked, onToggle, onChange }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
+
+  const updateName = (newName) => {
+    const changes = { name: newName }
+    if (item.name_translations) {
+      changes.name_translations = { ...item.name_translations, [lang]: newName }
+    }
+    onChange(index, { ...item, ...changes })
+  }
 
   const update = (field, value) => {
     onChange(index, { ...item, [field]: value })
@@ -34,8 +42,8 @@ export default function ScanReviewItemRow({ item, index, checked, onToggle, onCh
             />
             <input
               type="text"
-              value={item.name}
-              onChange={(e) => update('name', e.target.value)}
+              value={item.name_translations?.[lang] || item.name}
+              onChange={(e) => updateName(e.target.value)}
               className="w-2/3 border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
             />
           </div>

@@ -13,8 +13,8 @@ const ALL_TOOL_DECLARATIONS = [
       properties: {
         path: {
           type: 'string',
-          enum: ['/', '/inventory', '/chat'],
-          description: 'The route path: / for home, /inventory for inventory, /chat for chat',
+          enum: ['/', '/inventory', '/recipes', '/chat'],
+          description: 'The route path: / for home, /inventory for inventory, /recipes for recipes, /chat for chat',
         },
       },
       required: ['path'],
@@ -98,7 +98,8 @@ const ALL_TOOL_DECLARATIONS = [
     parameters: {
       type: 'object',
       properties: {
-        name:     { type: 'string', description: 'Product name' },
+        name:     { type: 'string', description: 'Product name (in the language of the user)' },
+        name_translations: { type: 'object', description: 'Object containing translations of the product name in French (fr), English (en), and Chinese (zh). Example: {"fr":"Pomme","en":"Apple","zh":"苹果"}' },
         quantity: { type: 'number', description: 'Quantity (default: 1)' },
         unit:     { type: 'string', enum: ['piece', 'kg', 'g', 'l', 'ml', 'pack'], description: 'Unit of measurement' },
         category: {
@@ -149,13 +150,151 @@ const ALL_TOOL_DECLARATIONS = [
       required: ['name'],
     },
   },
+  {
+    name: 'updateScanItem',
+    description: 'Update fields of a scanned item in the scan review list by its index. Use when user wants to change the name, price, quantity, category, etc. of a scanned item.',
+    parameters: {
+      type: 'object',
+      properties: {
+        index: { type: 'number', description: 'Zero-based index of the item in the scan list' },
+        fields: {
+          type: 'object',
+          description: 'Fields to update. Allowed keys: name, brand, quantity, unit, price, price_per_kg, category, store',
+        },
+      },
+      required: ['index', 'fields'],
+    },
+  },
+  {
+    name: 'removeScanItem',
+    description: 'Remove a scanned item from the scan review list by its index. Use when user wants to delete/remove an item from the scan results.',
+    parameters: {
+      type: 'object',
+      properties: {
+        index: { type: 'number', description: 'Zero-based index of the item to remove from the scan list' },
+      },
+      required: ['index'],
+    },
+  },
+  {
+    name: 'addScanItem',
+    description: 'Add a new item to the scan review list. Use when user wants to add a product that was missed by the scan.',
+    parameters: {
+      type: 'object',
+      properties: {
+        item: {
+          type: 'object',
+          description: 'The item to add with fields: name, quantity, unit, category, price (optional), brand (optional), store (optional)',
+        },
+      },
+      required: ['item'],
+    },
+  },
+  {
+    name: 'addRecipe',
+    description: 'Add a new recipe to the household cookbook. Use when user describes a recipe to add.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Recipe name' },
+        description: { type: 'string', description: 'Short description of the recipe' },
+        category: { type: 'string', enum: ['appetizer', 'main', 'dessert', 'snack', 'drink', 'other'], description: 'Recipe category' },
+        difficulty: { type: 'string', enum: ['easy', 'medium', 'hard'], description: 'Difficulty level' },
+        prep_time: { type: 'number', description: 'Preparation time in minutes' },
+        cook_time: { type: 'number', description: 'Cooking time in minutes' },
+        servings: { type: 'number', description: 'Number of servings' },
+        ingredients: { type: 'array', description: 'Array of {name, quantity, unit} objects', items: { type: 'object' } },
+        steps: { type: 'array', description: 'Array of {instruction, duration_minutes?} objects', items: { type: 'object' } },
+        equipment: { type: 'array', description: 'Array of equipment strings', items: { type: 'string' } },
+        tips: { type: 'array', description: 'Array of tip strings', items: { type: 'string' } },
+      },
+      required: ['name', 'category', 'difficulty', 'ingredients', 'steps'],
+    },
+  },
+  {
+    name: 'deleteRecipe',
+    description: 'Delete a recipe from the household cookbook by name (fuzzy match).',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name of the recipe to delete (fuzzy match)' },
+      },
+      required: ['name'],
+    },
+  },
+  {
+    name: 'rateRecipe',
+    description: 'Rate a recipe (1-5 stars). Use when user rates or scores a recipe.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name of the recipe to rate (fuzzy match)' },
+        rating: { type: 'number', description: 'Rating from 1 to 5' },
+      },
+      required: ['name', 'rating'],
+    },
+  },
+  {
+    name: 'addRecipeComment',
+    description: 'Add a comment to a recipe. Use when user wants to leave a note or comment on a recipe.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name of the recipe (fuzzy match)' },
+        content: { type: 'string', description: 'The comment text' },
+      },
+      required: ['name', 'content'],
+    },
+  },
+  {
+    name: 'updateRecipeStep',
+    description: 'Update a specific step of a recipe. Use when user wants to change or improve a recipe instruction.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name of the recipe (fuzzy match)' },
+        stepIndex: { type: 'number', description: 'Zero-based index of the step to update' },
+        newInstruction: { type: 'string', description: 'The new instruction text for this step' },
+      },
+      required: ['name', 'stepIndex', 'newInstruction'],
+    },
+  },
+  {
+    name: 'addRecipeTip',
+    description: 'Add a tip or trick to a recipe. Use when user shares cooking advice for a recipe.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name of the recipe (fuzzy match)' },
+        tip: { type: 'string', description: 'The tip text to add' },
+      },
+      required: ['name', 'tip'],
+    },
+  },
+  {
+    name: 'updateRecipeInfo',
+    description: 'Update general info of a recipe (name, description, category, difficulty, prep_time, cook_time, servings). Use when user wants to change recipe metadata.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name of the recipe to update (fuzzy match)' },
+        fields: { type: 'object', description: 'Fields to update. Allowed keys: name, description, category, difficulty, prep_time, cook_time, servings' },
+      },
+      required: ['name', 'fields'],
+    },
+  },
+  {
+    name: 'suggestRecipes',
+    description: 'Suggest recipes based on the current household inventory. Use when user asks for recipe ideas or what to cook.',
+    parameters: { type: 'object', properties: {} },
+  },
 ]
 
 // Actions toujours disponibles, quel que soit l'onglet actif
-const ALWAYS_AVAILABLE = ['navigate', 'sendChatMessage', 'editLastChatMessage', 'deleteLastChatMessage', 'addInventoryItem', 'updateInventoryItem', 'consumeInventoryItem', 'deleteInventoryItem']
+const ALWAYS_AVAILABLE = ['navigate', 'sendChatMessage', 'editLastChatMessage', 'deleteLastChatMessage', 'addInventoryItem', 'updateInventoryItem', 'consumeInventoryItem', 'deleteInventoryItem', 'addRecipe', 'deleteRecipe', 'rateRecipe', 'addRecipeComment', 'updateRecipeStep', 'addRecipeTip', 'updateRecipeInfo', 'suggestRecipes']
 
 function buildSystemPrompt(lang, currentPage, context, availableActions) {
-  const pageNames = { home: 'accueil/dashboard', inventory: 'inventaire alimentaire', chat: 'chat du foyer' }
+  const pageNames = { home: 'accueil/dashboard', inventory: 'inventaire alimentaire', recipes: 'recettes du foyer', chat: 'chat du foyer' }
   const pageName = pageNames[currentPage] || currentPage
 
   const actionDescriptions = ALL_TOOL_DECLARATIONS
@@ -170,6 +309,14 @@ function buildSystemPrompt(lang, currentPage, context, availableActions) {
 
   const inventorySection = context.inventoryItems?.length
     ? `- Inventaire (${context.inventoryItems.length} articles): ${context.inventoryItems.slice(0, 20).map(i => `${i.name}${i.brand ? ' (' + i.brand + ')' : ''}`).join(', ')}${context.inventoryItems.length > 20 ? '...' : ''}\n`
+    : ''
+
+  const recipesSection = context.recipes?.length
+    ? `- Recettes du foyer (${context.recipes.length}): ${context.recipes.slice(0, 15).map(r => r.name).join(', ')}${context.recipes.length > 15 ? '...' : ''}\n`
+    : ''
+
+  const scanReviewSection = context.scanReviewItems?.mode === 'scanReview'
+    ? `\nMODE VERIFICATION SCAN ACTIF — L'utilisateur verifie des articles scannes. Tu peux utiliser updateScanItem, removeScanItem, addScanItem pour modifier la liste.\nArticles scannes:\n${context.scanReviewItems.items.map((item, i) => `  [${i}] ${item.name}${item.brand ? ' (' + item.brand + ')' : ''} — ${item.quantity} ${item.unit}, ${item.price != null ? item.price + ' EUR' : 'prix inconnu'}, cat: ${item.category}${item.checked ? '' : ' (deselectionne)'}`).join('\n')}\n`
     : ''
 
   const categoryGuide = `
@@ -193,7 +340,7 @@ Tu aides ${context.profileName || 'l\'utilisateur'} a gerer son inventaire alime
 
 CONTEXTE ACTUEL:
 - Page active: ${pageName}
-${memberSection}${inventorySection}
+${memberSection}${inventorySection}${recipesSection}${scanReviewSection}
 ACTIONS DISPONIBLES:
 ${actionDescriptions}
 
@@ -215,7 +362,7 @@ You help ${context.profileName || 'the user'} manage their food inventory, find 
 
 CURRENT CONTEXT:
 - Active page: ${pageName}
-${memberSection}${inventorySection}
+${memberSection}${inventorySection}${recipesSection}${scanReviewSection}
 AVAILABLE ACTIONS:
 ${actionDescriptions}
 
@@ -237,7 +384,7 @@ OTHER INSTRUCTIONS:
 
 当前上下文:
 - 活动页面: ${pageName}
-${memberSection}${inventorySection}
+${memberSection}${inventorySection}${recipesSection}${scanReviewSection}
 可用操作:
 ${actionDescriptions}
 

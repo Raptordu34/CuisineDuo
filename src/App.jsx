@@ -4,12 +4,15 @@ import { AuthProvider } from './contexts/AuthContext'
 import { UnreadMessagesProvider } from './contexts/UnreadMessagesContext'
 import { MiamProvider } from './contexts/MiamContext'
 import Layout from './components/layout/Layout'
+import ReloadPrompt from './components/layout/ReloadPrompt'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import LoginPage from './pages/LoginPage'
 import OnboardingPage from './pages/OnboardingPage'
 import HomePage from './pages/HomePage'
 import ChatPage from './pages/ChatPage'
 import InventoryPage from './pages/InventoryPage'
+import RecipesPage from './pages/RecipesPage'
+import RecipeDetailPage from './pages/RecipeDetailPage'
 import AILogsPage from './pages/AILogsPage'
 
 function App() {
@@ -19,6 +22,7 @@ function App() {
       <AuthProvider>
       <UnreadMessagesProvider>
       <MiamProvider>
+        <ReloadPrompt />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
@@ -38,6 +42,26 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <InventoryPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/recipes"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <RecipesPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/recipes/:id"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <RecipeDetailPage />
                 </Layout>
               </ProtectedRoute>
             }
