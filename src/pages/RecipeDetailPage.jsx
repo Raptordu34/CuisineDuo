@@ -391,11 +391,11 @@ export default function RecipeDetailPage() {
         )}
 
         {/* Equipment */}
-        {recipe.equipment?.length > 0 && (
+        {tr.equipment?.length > 0 && (
           <div className="px-4 pb-4">
             <h2 className="text-sm font-semibold text-gray-700 mb-2">{t('recipes.equipmentLabel')}</h2>
             <ul className="space-y-1">
-              {recipe.equipment.map((eq, i) => (
+              {tr.equipment.map((eq, i) => (
                 <li key={i} className="text-sm text-gray-600 flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0" />
                   {typeof eq === 'string' ? eq : eq.name}

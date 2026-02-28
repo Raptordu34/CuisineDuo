@@ -68,14 +68,16 @@ Réponds UNIQUEMENT en JSON valide (pas de markdown), sous ce format exact:
           "description": "Translated description",
           "ingredients": [{"name": "translated ingredient name"}],
           "steps": [{"instruction": "Translated step instruction"}],
-          "tips": ["Translated tip"]
+          "tips": ["Translated tip"],
+          "equipment": ["Translated equipment"]
         },
         "${otherLangs[1]}": {
           "name": "Translated name",
           "description": "Translated description",
           "ingredients": [{"name": "translated ingredient name"}],
           "steps": [{"instruction": "Translated step instruction"}],
-          "tips": ["Translated tip"]
+          "tips": ["Translated tip"],
+          "equipment": ["Translated equipment"]
         }
       }
     }
@@ -86,7 +88,7 @@ Les champs principaux (name, description, ingredients, steps, tips) sont en ${la
 Le champ "translations" contient les traductions en ${otherLangLabels}.
 Pour les traductions d'ingredients, garde le meme ordre et nombre que le tableau principal, avec seulement le champ "name" traduit.
 Pour les traductions de steps, garde le meme ordre avec seulement "instruction" traduit.
-category, difficulty, prep_time, cook_time, servings, equipment restent identiques (pas besoin de les traduire).`
+category, difficulty, prep_time, cook_time, servings restent identiques (pas besoin de les traduire).`
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey)
@@ -114,6 +116,7 @@ category, difficulty, prep_time, cook_time, servings, equipment restent identiqu
         ingredients: r.ingredients?.map(i => ({ name: i.name })),
         steps: r.steps?.map(s => ({ instruction: s.instruction })),
         tips: r.tips,
+        equipment: r.equipment,
       }
       return { ...r, translations }
     })

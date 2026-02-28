@@ -1,10 +1,10 @@
 /**
- * Retourne le nom/description/ingredients/steps/tips traduits d'une recette
+ * Retourne le nom/description/ingredients/steps/tips/equipment traduits d'une recette
  * selon la langue courante, en fallback sur les champs principaux.
  *
  * @param {object} recipe - L'objet recette avec potentiellement un champ `translations`
  * @param {string} lang - Code langue courante ('fr', 'en', 'zh')
- * @returns {object} - { name, description, ingredients, steps, tips } traduits
+ * @returns {object} - { name, description, ingredients, steps, tips, equipment } traduits
  */
 export function getTranslatedRecipe(recipe, lang) {
   if (!recipe) return { name: '', description: '' }
@@ -32,6 +32,8 @@ export function getTranslatedRecipe(recipe, lang) {
 
   // Tips traduits
   const tips = tr.tips?.length ? tr.tips : recipe.tips
+  // Equipements traduits
+  const equipment = tr.equipment?.length ? tr.equipment : recipe.equipment
 
   return {
     ...recipe,
@@ -40,5 +42,6 @@ export function getTranslatedRecipe(recipe, lang) {
     ingredients,
     steps,
     tips,
+    equipment,
   }
 }
