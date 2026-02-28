@@ -34,7 +34,7 @@ export default function MiamFAB() {
     <>
       {/* Mobile notch dock behind FAB */}
       <div
-        className="md:hidden fixed bottom-[1.75rem] left-1/2 -translate-x-1/2 z-50 w-[4.25rem] h-[4.25rem] rounded-full bg-white"
+        className="md:hidden fixed bottom-[1.25rem] left-1/2 -translate-x-1/2 z-50 w-[4.25rem] h-[4.25rem] rounded-full bg-white"
         style={{ boxShadow: '0 -1px 0 0 #e5e7eb, 0 -4px 6px -2px rgba(0,0,0,0.07)' }}
       />
 
@@ -46,7 +46,7 @@ export default function MiamFAB() {
         onPointerUp={longPressProps.onPointerUp}
         onPointerLeave={longPressProps.onPointerLeave}
         onContextMenu={longPressProps.onContextMenu}
-        className="fixed bottom-[2.25rem] left-1/2 -translate-x-1/2 md:bottom-8 md:right-8 md:left-auto md:translate-x-0 z-[51]
+        className="fixed bottom-[1.8rem] left-1/2 -translate-x-1/2 md:bottom-8 md:right-8 md:left-auto md:translate-x-0 z-[51]
           w-[3.25rem] h-[3.25rem] rounded-full
           bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 shadow-indigo-500/30
           text-white shadow-lg
