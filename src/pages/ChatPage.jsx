@@ -16,11 +16,32 @@ import { useMessageReactions } from '../hooks/useMessageReactions'
 import { useLongPress } from '../hooks/useLongPress'
 import { logAI } from '../lib/aiLogger'
 
+const MESSAGES_CACHE_KEY = 'cuisineduo_messages'
+
+function getCachedMessages(householdId) {
+  try {
+    const raw = localStorage.getItem(`${MESSAGES_CACHE_KEY}_${householdId}`)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+function setCachedMessages(householdId, messages) {
+  try {
+    // Garder uniquement les 200 derniers messages en cache pour limiter la taille
+    const toCache = messages.slice(-200)
+    localStorage.setItem(`${MESSAGES_CACHE_KEY}_${householdId}`, JSON.stringify(toCache))
+  } catch {
+    // localStorage plein ou indisponible
+  }
+}
+
 export default function ChatPage() {
   const { profile } = useAuth()
   const { t, lang } = useLanguage()
   const { householdMembers } = useMiam()
-  const [messages, setMessages] = useState([])
+  const [messages, setMessages] = useState(() => getCachedMessages(profile?.household_id))
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [dictationCorrecting, setDictationCorrecting] = useState(false)
@@ -114,7 +135,10 @@ export default function ChatPage() {
         .select('*, profiles(display_name)')
         .eq('household_id', profile.household_id)
         .order('created_at', { ascending: true })
-      if (data) setMessages(data)
+      if (data) {
+        setMessages(data)
+        setCachedMessages(profile.household_id, data)
+      }
     }
 
     const startPollingFallback = () => {
@@ -581,7 +605,7 @@ export default function ChatPage() {
       : 0
 
   return (
-    <div className="fixed top-14 bottom-16 left-0 right-0 z-40 flex flex-col bg-gray-50 md:static md:z-auto md:max-w-2xl md:mx-auto md:-mt-8 md:-mb-8 md:h-[calc(100dvh-4rem)]">
+    <div className="fixed top-[74px] bottom-16 left-0 right-0 z-40 flex flex-col bg-gray-50 md:static md:z-auto md:max-w-2xl md:mx-auto md:-mt-8 md:-mb-8 md:h-[calc(100dvh-4rem)]">
       <h1 className="hidden md:block text-xl font-bold text-gray-900 px-4 py-3 border-b border-gray-200 shrink-0">
         {t('chat.title')}
       </h1>

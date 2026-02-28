@@ -32,11 +32,30 @@ function autoPriceCalc(row) {
   return row
 }
 
+const INVENTORY_CACHE_KEY = 'cuisineduo_inventory'
+
+function getCachedInventory(householdId) {
+  try {
+    const raw = localStorage.getItem(`${INVENTORY_CACHE_KEY}_${householdId}`)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+function setCachedInventory(householdId, items) {
+  try {
+    localStorage.setItem(`${INVENTORY_CACHE_KEY}_${householdId}`, JSON.stringify(items))
+  } catch {
+    // localStorage plein ou indisponible
+  }
+}
+
 export default function InventoryPage() {
   const { profile } = useAuth()
   const { t } = useLanguage()
   const { registerContextProvider } = useMiam()
-  const [items, setItems] = useState([])
+  const [items, setItems] = useState(() => getCachedInventory(profile?.household_id))
   const [category, setCategory] = useState('all')
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
@@ -88,6 +107,7 @@ export default function InventoryPage() {
         .order('created_at', { ascending: false })
       if (data) {
         setItems(data)
+        setCachedInventory(profile.household_id, data)
         // Patch existing items missing price_per_kg or price
         for (const item of data) {
           const patched = autoPriceCalc(item)
@@ -119,7 +139,10 @@ export default function InventoryPage() {
             .select('*')
             .eq('household_id', profile.household_id)
             .order('created_at', { ascending: false })
-          if (data) setItems(data)
+          if (data) {
+            setItems(data)
+            setCachedInventory(profile.household_id, data)
+          }
         }
       )
       .subscribe()

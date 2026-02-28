@@ -2,14 +2,20 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import useOnlineStatus from '../../hooks/useOnlineStatus'
+import useDataPreloader from '../../hooks/useDataPreloader'
+import { supabase } from '../../lib/supabase'
 import { useRef, useState, useEffect } from 'react'
 
 export default function ProtectedRoute({ children }) {
-  const { user, profile, loading, syncing, signOut } = useAuth()
+  const { user, profile, loading, signOut } = useAuth()
   const { t } = useLanguage()
-  const isOnline = useOnlineStatus()
+  const connectionStatus = useOnlineStatus() // 'online' | 'slow' | 'offline'
   const [showSlowWarning, setShowSlowWarning] = useState(false)
   const timerRef = useRef(null)
+  const wasOfflineRef = useRef(false)
+
+  // Precharger toutes les donnees au lancement
+  useDataPreloader()
 
   useEffect(() => {
     if (loading) {
@@ -21,6 +27,22 @@ export default function ProtectedRoute({ children }) {
     }
   }, [loading])
 
+  // Reconnexion Realtime quand on retrouve la connexion
+  useEffect(() => {
+    if (connectionStatus === 'offline') {
+      wasOfflineRef.current = true
+      return
+    }
+
+    if (wasOfflineRef.current && (connectionStatus === 'online' || connectionStatus === 'slow')) {
+      wasOfflineRef.current = false
+      // Reconnecter tous les channels Supabase Realtime
+      supabase.realtime.connect()
+      // Les channels individuels se reconnecteront automatiquement
+      console.log('[Realtime] Reconnexion apres retour en ligne')
+    }
+  }, [connectionStatus])
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-gray-50">
@@ -31,7 +53,7 @@ export default function ProtectedRoute({ children }) {
             <p className="text-xs text-gray-400">
               {t('offline.slowConnection')}
             </p>
-            {!isOnline && (
+            {connectionStatus === 'offline' && (
               <p className="text-xs text-amber-600 font-medium">
                 {t('offline.noInternet')}
               </p>
@@ -105,19 +127,5 @@ export default function ProtectedRoute({ children }) {
 
   if (!profile?.household_id) return <Navigate to="/onboarding" replace />
 
-  return (
-    <>
-      {syncing && (
-        <div className="bg-blue-500 text-white text-center text-xs py-0.5 px-2 font-medium animate-pulse">
-          {t('offline.syncing')}
-        </div>
-      )}
-      {!isOnline && (
-        <div className="bg-amber-500 text-white text-center text-xs py-1 px-2 font-medium">
-          {t('offline.banner')}
-        </div>
-      )}
-      {children}
-    </>
-  )
+  return children
 }

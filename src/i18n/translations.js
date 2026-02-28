@@ -220,7 +220,8 @@ export const translations = {
     'common.loading': 'Chargement...',
 
     // Offline
-    'offline.banner': 'Mode hors ligne — certaines fonctions sont limitees',
+    'offline.connected': 'En ligne',
+    'offline.banner': 'Hors ligne — donnees en cache',
     'offline.slowConnection': 'Connexion lente, veuillez patienter...',
     'offline.noInternet': 'Pas de connexion internet',
     'offline.profileLoadFailed': 'Impossible de charger votre profil',
@@ -228,6 +229,7 @@ export const translations = {
     'offline.retry': 'Reessayer',
     'offline.syncing': 'Synchronisation...',
     'offline.networkError': 'Erreur reseau. Verifiez votre connexion.',
+    'offline.weakConnection': 'Connexion faible — chargement ralenti',
     'offline.updateAvailable': 'Une mise a jour est disponible.',
     'offline.updateNow': 'Mettre a jour',
     'offline.dismiss': 'Plus tard',
@@ -475,7 +477,8 @@ export const translations = {
     'common.loading': 'Loading...',
 
     // Offline
-    'offline.banner': 'Offline mode — some features are limited',
+    'offline.connected': 'Online',
+    'offline.banner': 'Offline — cached data',
     'offline.slowConnection': 'Slow connection, please wait...',
     'offline.noInternet': 'No internet connection',
     'offline.profileLoadFailed': 'Unable to load your profile',
@@ -483,6 +486,7 @@ export const translations = {
     'offline.retry': 'Retry',
     'offline.syncing': 'Syncing...',
     'offline.networkError': 'Network error. Check your connection.',
+    'offline.weakConnection': 'Weak connection — loading may be slow',
     'offline.updateAvailable': 'An update is available.',
     'offline.updateNow': 'Update',
     'offline.dismiss': 'Later',
@@ -730,7 +734,8 @@ export const translations = {
     'common.loading': '\u52a0\u8f7d\u4e2d...',
 
     // Offline
-    'offline.banner': '\u79bb\u7ebf\u6a21\u5f0f — \u90e8\u5206\u529f\u80fd\u53d7\u9650',
+    'offline.connected': '\u5728\u7ebf',
+    'offline.banner': '\u79bb\u7ebf — \u7f13\u5b58\u6570\u636e',
     'offline.slowConnection': '\u8fde\u63a5\u7f13\u6162\uff0c\u8bf7\u7a0d\u5019...',
     'offline.noInternet': '\u65e0\u7f51\u7edc\u8fde\u63a5',
     'offline.profileLoadFailed': '\u65e0\u6cd5\u52a0\u8f7d\u60a8\u7684\u4e2a\u4eba\u8d44\u6599',
@@ -738,6 +743,7 @@ export const translations = {
     'offline.retry': '\u91cd\u8bd5',
     'offline.syncing': '\u540c\u6b65\u4e2d...',
     'offline.networkError': '\u7f51\u7edc\u9519\u8bef\u3002\u8bf7\u68c0\u67e5\u8fde\u63a5\u3002',
+    'offline.weakConnection': '\u7f51\u7edc\u8f83\u5f31 \u2014 \u52a0\u8f7d\u53ef\u80fd\u8f83\u6162',
     'offline.updateAvailable': '\u6709\u53ef\u7528\u7684\u66f4\u65b0\u3002',
     'offline.updateNow': '\u66f4\u65b0',
     'offline.dismiss': '\u7a0d\u540e',

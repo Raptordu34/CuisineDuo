@@ -82,29 +82,36 @@ export function AuthProvider({ children }) {
             setSyncing(false)
           }
 
-          // Valider la session cote serveur (non-bloquant)
-          try {
-            const { error: userError } = await supabase.auth.getUser()
-            if (cancelled) return
-            if (userError) {
-              console.warn('[Auth] Session invalide cote serveur:', userError.message)
-              const { data: refreshData } = await supabase.auth.refreshSession()
-              if (!refreshData?.session) {
-                console.warn('[Auth] Refresh echoue — deconnexion')
-                await supabase.auth.signOut().catch(() => {})
-                setUser(null)
-                setProfile(null)
-                setCachedProfile(null)
+          // Valider la session cote serveur (non-bloquant, uniquement en ligne)
+          if (navigator.onLine) {
+            try {
+              const { error: userError } = await supabase.auth.getUser()
+              if (cancelled) return
+              if (userError) {
+                console.warn('[Auth] Session invalide cote serveur:', userError.message)
+                const { data: refreshData } = await supabase.auth.refreshSession()
+                if (!refreshData?.session) {
+                  console.warn('[Auth] Refresh echoue — deconnexion')
+                  await supabase.auth.signOut().catch(() => {})
+                  setUser(null)
+                  setProfile(null)
+                  setCachedProfile(null)
+                }
               }
+            } catch {
+              // Erreur reseau sur getUser — ignorer, on garde la session locale
             }
-          } catch {
-            // Erreur reseau sur getUser — ignorer, on garde la session locale
           }
         } else {
           // Pas de session Supabase
-          setUser(null)
-          if (!cachedProfile) {
-            setProfile(null)
+          if (!navigator.onLine && cachedProfile) {
+            // Hors ligne avec un profil cache — on garde l'etat pour ne pas rediriger
+            console.warn('[Auth] Pas de session mais hors ligne — on garde le cache')
+          } else {
+            setUser(null)
+            if (!cachedProfile) {
+              setProfile(null)
+            }
           }
         }
       } catch (err) {
@@ -124,6 +131,14 @@ export function AuthProvider({ children }) {
       async (event, session) => {
         if (cancelled) return
         if (!initializedRef.current && event === 'INITIAL_SESSION') return
+
+        // Si on recoit un SIGNED_OUT alors qu'on est hors ligne,
+        // c'est un echec de token refresh — pas une vraie deconnexion.
+        // On garde la session locale et le profil cache.
+        if (event === 'SIGNED_OUT' && !navigator.onLine) {
+          console.warn('[Auth] SIGNED_OUT recu hors ligne — ignore, on garde le cache')
+          return
+        }
 
         setUser(session?.user ?? null)
         if (session?.user) {
