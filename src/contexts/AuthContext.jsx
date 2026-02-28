@@ -50,70 +50,44 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let cancelled = false
 
-    const init = async () => {
-      // Sécurité : au bout de 5s, on force la fin du loading au cas où Supabase/le réseau serait totalement bloqué
-      const safetyTimeout = setTimeout(() => {
-        if (!cancelled && !initializedRef.current) {
-          console.warn('[Auth] Init timeout de securite, on coupe le loading')
-          setLoading(false)
-        }
-      }, 5000)
+    // Si on a un profil cache, debloquer l'UI immediatement
+    // getSession() peut bloquer longtemps (Web Locks API + token refresh)
+    if (cachedProfile) {
+      setLoading(false)
+    }
 
-      // ETAPE 1 : getSession() — lit le localStorage Supabase, quasi-instantane
-      // Cela restaure le JWT dans le client Supabase pour que les requetes RLS fonctionnent
+    const syncSession = async () => {
       try {
-        const fetchSessionPromise = supabase.auth.getSession()
-        const sessionTimeoutPromise = new Promise((resolve) => setTimeout(() => resolve('timeout'), 4000))
-        
-        const sessionResult = await Promise.race([fetchSessionPromise, sessionTimeoutPromise])
-        if (cancelled) {
-          clearTimeout(safetyTimeout)
-          return
-        }
-
-        if (sessionResult === 'timeout') {
-          console.warn('[Auth] supabase.auth.getSession timeout')
-          throw new Error('getSession timeout')
-        }
-
-        const { data: { session } } = sessionResult
+        const t0 = Date.now()
+        const { data: { session } } = await supabase.auth.getSession()
+        console.log(`[Auth] getSession() resolved in ${Date.now() - t0}ms`)
+        if (cancelled) return
 
         if (session?.user) {
           setUser(session.user)
-          // Si on a un profil cache, on affiche tout de suite
-          if (cachedProfile) {
-            setLoading(false)
-          }
 
-          // ETAPE 2 : charger le profil frais (reseau) en arriere-plan
+          // Charger le profil frais en arriere-plan
           setSyncing(true)
-
-          const fetchPromise = fetchProfile(session.user.id)
-          const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve('timeout'), 5000))
-          
-          const freshProfileOrTimeout = await Promise.race([fetchPromise, timeoutPromise])
-
-          if (cancelled) return
-
-          if (freshProfileOrTimeout !== 'timeout' && freshProfileOrTimeout) {
-            setProfile(freshProfileOrTimeout)
-            setCachedProfile(freshProfileOrTimeout)
-          } else if (freshProfileOrTimeout === 'timeout') {
-            console.warn('[Auth] fetchProfile timeout - proceeding with local cache')
+          try {
+            const freshProfile = await Promise.race([
+              fetchProfile(session.user.id),
+              new Promise((resolve) => setTimeout(() => resolve(null), 5000)),
+            ])
+            if (cancelled) return
+            if (freshProfile) {
+              setProfile(freshProfile)
+              setCachedProfile(freshProfile)
+            }
+          } finally {
+            setSyncing(false)
           }
 
-          // Si echec, on garde le cache — pas de deconnexion
-          setSyncing(false)
-          setLoading(false)
-
-          // ETAPE 3 : valider la session cote serveur (non-bloquant)
-          // Ceci detecte les tokens expires/revoques
+          // Valider la session cote serveur (non-bloquant)
           try {
             const { error: userError } = await supabase.auth.getUser()
             if (cancelled) return
             if (userError) {
               console.warn('[Auth] Session invalide cote serveur:', userError.message)
-              // Tenter un refresh avant de deconnecter
               const { data: refreshData } = await supabase.auth.refreshSession()
               if (!refreshData?.session) {
                 console.warn('[Auth] Refresh echoue — deconnexion')
@@ -127,37 +101,28 @@ export function AuthProvider({ children }) {
             // Erreur reseau sur getUser — ignorer, on garde la session locale
           }
         } else {
-          // Pas de session
+          // Pas de session Supabase
           setUser(null)
           if (!cachedProfile) {
             setProfile(null)
           }
-          setLoading(false)
         }
       } catch (err) {
         if (cancelled) return
         console.error('[Auth] Init error:', err)
-        // getSession a echoue — utiliser le cache si disponible
-        if (cachedProfile) {
-          setProfile(cachedProfile)
-        }
-        setLoading(false)
       } finally {
-        if (typeof safetyTimeout !== 'undefined') {
-          clearTimeout(safetyTimeout)
-        }
+        // Dans tous les cas, s'assurer que le loading est coupe
+        setLoading(false)
+        initializedRef.current = true
       }
-
-      initializedRef.current = true
     }
 
-    init()
+    syncSession()
 
     // Ecouter les changements (sign in, sign out, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (cancelled) return
-        // Ignorer les evenements avant l'init pour eviter les races
         if (!initializedRef.current && event === 'INITIAL_SESSION') return
 
         setUser(session?.user ?? null)

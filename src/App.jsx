@@ -4,6 +4,7 @@ import { AuthProvider } from './contexts/AuthContext'
 import { UnreadMessagesProvider } from './contexts/UnreadMessagesContext'
 import { MiamProvider } from './contexts/MiamContext'
 import Layout from './components/layout/Layout'
+import ReloadPrompt from './components/layout/ReloadPrompt'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import LoginPage from './pages/LoginPage'
 import OnboardingPage from './pages/OnboardingPage'
@@ -19,6 +20,7 @@ function App() {
       <AuthProvider>
       <UnreadMessagesProvider>
       <MiamProvider>
+        <ReloadPrompt />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />

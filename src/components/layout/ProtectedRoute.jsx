@@ -1,11 +1,13 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
+import useOnlineStatus from '../../hooks/useOnlineStatus'
 import { useRef, useState, useEffect } from 'react'
 
 export default function ProtectedRoute({ children }) {
   const { user, profile, loading, syncing, signOut } = useAuth()
   const { t } = useLanguage()
+  const isOnline = useOnlineStatus()
   const [showSlowWarning, setShowSlowWarning] = useState(false)
   const timerRef = useRef(null)
 
@@ -29,7 +31,7 @@ export default function ProtectedRoute({ children }) {
             <p className="text-xs text-gray-400">
               {t('offline.slowConnection')}
             </p>
-            {!navigator.onLine && (
+            {!isOnline && (
               <p className="text-xs text-amber-600 font-medium">
                 {t('offline.noInternet')}
               </p>
@@ -110,7 +112,7 @@ export default function ProtectedRoute({ children }) {
           {t('offline.syncing')}
         </div>
       )}
-      {!navigator.onLine && (
+      {!isOnline && (
         <div className="bg-amber-500 text-white text-center text-xs py-1 px-2 font-medium">
           {t('offline.banner')}
         </div>

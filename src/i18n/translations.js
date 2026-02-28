@@ -228,6 +228,9 @@ export const translations = {
     'offline.retry': 'Reessayer',
     'offline.syncing': 'Synchronisation...',
     'offline.networkError': 'Erreur reseau. Verifiez votre connexion.',
+    'offline.updateAvailable': 'Une mise a jour est disponible.',
+    'offline.updateNow': 'Mettre a jour',
+    'offline.dismiss': 'Plus tard',
 
     // Miam Orchestrator
     'miam.fab.tooltip': 'Parler a Miam',
@@ -480,6 +483,9 @@ export const translations = {
     'offline.retry': 'Retry',
     'offline.syncing': 'Syncing...',
     'offline.networkError': 'Network error. Check your connection.',
+    'offline.updateAvailable': 'An update is available.',
+    'offline.updateNow': 'Update',
+    'offline.dismiss': 'Later',
 
     // Miam Orchestrator
     'miam.fab.tooltip': 'Talk to Miam',
@@ -732,6 +738,9 @@ export const translations = {
     'offline.retry': '\u91cd\u8bd5',
     'offline.syncing': '\u540c\u6b65\u4e2d...',
     'offline.networkError': '\u7f51\u7edc\u9519\u8bef\u3002\u8bf7\u68c0\u67e5\u8fde\u63a5\u3002',
+    'offline.updateAvailable': '\u6709\u53ef\u7528\u7684\u66f4\u65b0\u3002',
+    'offline.updateNow': '\u66f4\u65b0',
+    'offline.dismiss': '\u7a0d\u540e',
 
     // Miam Orchestrator
     'miam.fab.tooltip': '\u548cMiam\u804a\u5929',
