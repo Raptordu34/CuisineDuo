@@ -10,6 +10,7 @@ import RecipeCategoryFilter from '../components/recipes/RecipeCategoryFilter'
 import AddRecipeModal from '../components/recipes/AddRecipeModal'
 import EditRecipeModal from '../components/recipes/EditRecipeModal'
 import SuggestPreviewModal from '../components/recipes/SuggestPreviewModal'
+import SuggestConfigModal from '../components/recipes/SuggestConfigModal'
 import { apiPost } from '../lib/apiClient'
 import { logAI } from '../lib/aiLogger'
 
@@ -46,6 +47,7 @@ export default function RecipesPage() {
   const [suggestPreview, setSuggestPreview] = useState(null)
   const [suggesting, setSuggesting] = useState(false)
   const [suggestError, setSuggestError] = useState(null)
+  const [showSuggestConfig, setShowSuggestConfig] = useState(false)
 
   // Miam actions
   useMiamActions({
@@ -58,8 +60,8 @@ export default function RecipesPage() {
       description: 'Filter recipes by category',
     },
     suggestRecipes: {
-      handler: () => handleSuggest(),
-      description: 'Suggest recipes based on inventory',
+      handler: () => setShowSuggestConfig(true),
+      description: 'Open recipe suggestion config',
     },
   })
 
@@ -134,7 +136,45 @@ export default function RecipesPage() {
     setEditingRecipe(null)
   }
 
-  const handleSuggest = useCallback(async () => {
+  // Fetch aggregated taste profile for the household
+  const fetchTasteProfile = useCallback(async () => {
+    if (!profile?.household_id) return null
+    const { data: members } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('household_id', profile.household_id)
+    if (!members?.length) return null
+    const memberIds = members.map(m => m.id)
+    const { data: prefs } = await supabase
+      .from('taste_preferences')
+      .select('*')
+      .in('profile_id', memberIds)
+    if (!prefs?.length) return null
+
+    // Aggregate: min for taste axes, union for banned/restrictions
+    const axes = ['sweetness', 'saltiness', 'spiciness', 'acidity', 'bitterness', 'umami', 'richness']
+    const aggregated = {}
+    for (const axis of axes) {
+      const values = prefs.map(p => p[axis]).filter(v => v != null)
+      if (values.length) aggregated[axis] = Math.min(...values)
+    }
+    const bannedSet = new Set()
+    const restrictionsSet = new Set()
+    const notes = []
+    for (const p of prefs) {
+      if (Array.isArray(p.banned_ingredients)) p.banned_ingredients.forEach(i => bannedSet.add(i))
+      if (Array.isArray(p.dietary_restrictions)) p.dietary_restrictions.forEach(r => restrictionsSet.add(r))
+      if (p.additional_notes) notes.push(p.additional_notes)
+    }
+    return {
+      ...aggregated,
+      banned_ingredients: [...bannedSet],
+      dietary_restrictions: [...restrictionsSet],
+      notes: notes.join(' | '),
+    }
+  }, [profile?.household_id])
+
+  const handleSuggest = useCallback(async ({ inventoryCount, discoveryCount } = { inventoryCount: 2, discoveryCount: 1 }) => {
     if (suggesting) return
 
     // Garde : inventaire vide
@@ -145,14 +185,25 @@ export default function RecipesPage() {
 
     setSuggesting(true)
     setSuggestError(null)
+    setShowSuggestConfig(false)
     const t0 = Date.now()
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), SUGGEST_TIMEOUT_MS)
 
     try {
+      // Prepare existing recipes for anti-duplicates (max 50)
+      const existingRecipes = recipes.slice(0, 50).map(r => ({ name: r.name, category: r.category }))
+
+      // Fetch taste profile
+      const tasteProfile = await fetchTasteProfile()
+
       const res = await apiPost('/api/suggest-recipes', {
         inventory: inventoryItems,
         lang,
+        inventoryCount,
+        discoveryCount,
+        existingRecipes,
+        tasteProfile,
       }, { signal: controller.signal })
 
       clearTimeout(timeout)
@@ -164,7 +215,7 @@ export default function RecipesPage() {
           householdId: profile?.household_id,
           profileId: profile?.id,
           endpoint: 'suggest-recipes',
-          input: { lang, inventoryCount: inventoryItems.length },
+          input: { lang, inventoryCount, discoveryCount, inventoryItemCount: inventoryItems.length },
           output: { recipeCount: data.recipes?.length ?? 0 },
           durationMs,
         })
@@ -179,7 +230,7 @@ export default function RecipesPage() {
           householdId: profile?.household_id,
           profileId: profile?.id,
           endpoint: 'suggest-recipes',
-          input: { lang, inventoryCount: inventoryItems.length },
+          input: { lang, inventoryCount, discoveryCount, inventoryItemCount: inventoryItems.length },
           output: { raw: errBody.raw?.slice?.(0, 300) },
           durationMs,
           error: errBody.error || `HTTP ${res.status}`,
@@ -194,7 +245,7 @@ export default function RecipesPage() {
         householdId: profile?.household_id,
         profileId: profile?.id,
         endpoint: 'suggest-recipes',
-        input: { lang, inventoryCount: inventoryItems.length },
+        input: { lang, inventoryCount, discoveryCount, inventoryItemCount: inventoryItems.length },
         durationMs,
         error: isTimeout ? 'Client timeout' : (err.message || 'Unknown error'),
       })
@@ -202,7 +253,7 @@ export default function RecipesPage() {
     } finally {
       setSuggesting(false)
     }
-  }, [suggesting, inventoryItems, lang, t, profile])
+  }, [suggesting, inventoryItems, recipes, lang, t, profile, fetchTasteProfile])
 
   const handleSaveSuggestion = async (recipe) => {
     await supabase.from('recipes').insert({
@@ -273,7 +324,7 @@ export default function RecipesPage() {
         <h1 className="text-lg font-bold text-gray-900 truncate">{t('recipes.title')}</h1>
         <div className="flex gap-1.5 shrink-0">
           <button
-            onClick={handleSuggest}
+            onClick={() => setShowSuggestConfig(true)}
             disabled={suggesting}
             className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-full text-xs font-medium transition-colors cursor-pointer"
           >
@@ -389,12 +440,19 @@ export default function RecipesPage() {
         />
       )}
 
+      {showSuggestConfig && (
+        <SuggestConfigModal
+          onConfirm={handleSuggest}
+          onClose={() => setShowSuggestConfig(false)}
+        />
+      )}
+
       {suggestPreview && (
         <SuggestPreviewModal
           recipes={suggestPreview}
           onClose={() => setSuggestPreview(null)}
           onSave={handleSaveSuggestion}
-          onRetry={() => { setSuggestPreview(null); handleSuggest() }}
+          onRetry={() => { setSuggestPreview(null); setShowSuggestConfig(true) }}
           retrying={suggesting}
         />
       )}

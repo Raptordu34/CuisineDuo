@@ -288,10 +288,26 @@ const ALL_TOOL_DECLARATIONS = [
     description: 'Suggest recipes based on the current household inventory. Use when user asks for recipe ideas or what to cook.',
     parameters: { type: 'object', properties: {} },
   },
+  {
+    name: 'updateTasteProfile',
+    description: 'Update the user\'s taste profile. Use when the user mentions taste preferences, spice tolerance, or rates a dish. Adjustments should be incremental (values 1-5).',
+    parameters: {
+      type: 'object',
+      properties: {
+        sweetness: { type: 'number', description: 'Sweetness tolerance (1-5)' },
+        saltiness: { type: 'number', description: 'Saltiness tolerance (1-5)' },
+        spiciness: { type: 'number', description: 'Spiciness tolerance (1-5)' },
+        acidity: { type: 'number', description: 'Acidity tolerance (1-5)' },
+        bitterness: { type: 'number', description: 'Bitterness tolerance (1-5)' },
+        umami: { type: 'number', description: 'Umami affinity (1-5)' },
+        richness: { type: 'number', description: 'Richness affinity (1-5)' },
+      },
+    },
+  },
 ]
 
 // Actions toujours disponibles, quel que soit l'onglet actif
-const ALWAYS_AVAILABLE = ['navigate', 'sendChatMessage', 'editLastChatMessage', 'deleteLastChatMessage', 'addInventoryItem', 'updateInventoryItem', 'consumeInventoryItem', 'deleteInventoryItem', 'addRecipe', 'deleteRecipe', 'rateRecipe', 'addRecipeComment', 'updateRecipeStep', 'addRecipeTip', 'updateRecipeInfo', 'suggestRecipes']
+const ALWAYS_AVAILABLE = ['navigate', 'sendChatMessage', 'editLastChatMessage', 'deleteLastChatMessage', 'addInventoryItem', 'updateInventoryItem', 'consumeInventoryItem', 'deleteInventoryItem', 'addRecipe', 'deleteRecipe', 'rateRecipe', 'addRecipeComment', 'updateRecipeStep', 'addRecipeTip', 'updateRecipeInfo', 'suggestRecipes', 'updateTasteProfile']
 
 function buildSystemPrompt(lang, currentPage, context, availableActions) {
   const pageNames = { home: 'accueil/dashboard', inventory: 'inventaire alimentaire', recipes: 'recettes du foyer', chat: 'chat du foyer' }
@@ -313,6 +329,10 @@ function buildSystemPrompt(lang, currentPage, context, availableActions) {
 
   const recipesSection = context.recipes?.length
     ? `- Recettes du foyer (${context.recipes.length}): ${context.recipes.slice(0, 15).map(r => r.name).join(', ')}${context.recipes.length > 15 ? '...' : ''}\n`
+    : ''
+
+  const tasteProfileSection = context.tasteProfile
+    ? `- Profil gustatif: ${Object.entries(context.tasteProfile).filter(([k, v]) => v != null && !['banned_ingredients', 'dietary_restrictions', 'notes', 'additional_notes'].includes(k)).map(([k, v]) => `${k}: ${v}/5`).join(', ')}${context.tasteProfile.banned_ingredients?.length ? ` | Bannis: ${context.tasteProfile.banned_ingredients.join(', ')}` : ''}${context.tasteProfile.dietary_restrictions?.length ? ` | Restrictions: ${context.tasteProfile.dietary_restrictions.join(', ')}` : ''}\n`
     : ''
 
   const scanReviewSection = context.scanReviewItems?.mode === 'scanReview'
@@ -340,7 +360,7 @@ Tu aides ${context.profileName || 'l\'utilisateur'} a gerer son inventaire alime
 
 CONTEXTE ACTUEL:
 - Page active: ${pageName}
-${memberSection}${inventorySection}${recipesSection}${scanReviewSection}
+${memberSection}${inventorySection}${recipesSection}${tasteProfileSection}${scanReviewSection}
 ACTIONS DISPONIBLES:
 ${actionDescriptions}
 
@@ -362,7 +382,7 @@ You help ${context.profileName || 'the user'} manage their food inventory, find 
 
 CURRENT CONTEXT:
 - Active page: ${pageName}
-${memberSection}${inventorySection}${recipesSection}${scanReviewSection}
+${memberSection}${inventorySection}${recipesSection}${tasteProfileSection}${scanReviewSection}
 AVAILABLE ACTIONS:
 ${actionDescriptions}
 
@@ -384,7 +404,7 @@ OTHER INSTRUCTIONS:
 
 当前上下文:
 - 活动页面: ${pageName}
-${memberSection}${inventorySection}${recipesSection}${scanReviewSection}
+${memberSection}${inventorySection}${recipesSection}${tasteProfileSection}${scanReviewSection}
 可用操作:
 ${actionDescriptions}
 

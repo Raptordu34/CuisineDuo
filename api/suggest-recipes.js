@@ -13,7 +13,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
-  const { inventory, lang, preferences } = req.body
+  const { inventory, lang, preferences, inventoryCount, discoveryCount, existingRecipes, tasteProfile } = req.body
   if (!inventory || !Array.isArray(inventory)) {
     return res.status(400).json({ error: 'Inventory array required' })
   }
@@ -38,16 +38,80 @@ export default async function handler(req, res) {
   const otherLangs = ['fr', 'en', 'zh'].filter(l => l !== lang)
   const otherLangLabels = otherLangs.map(l => `${l} (${langLabels[l]})`).join(', ')
 
-  const prompt = `Tu es un chef cuisinier créatif. Voici les ingrédients disponibles dans un foyer:
+  // Build prompt sections
+  const invCount = inventoryCount ?? 2
+  const discCount = discoveryCount ?? 1
+  const totalCount = invCount + discCount
+
+  // Anti-duplicates section
+  let antiDuplicateSection = ''
+  if (Array.isArray(existingRecipes) && existingRecipes.length > 0) {
+    const recipeList = existingRecipes.map(r => `- ${r.name} (${r.category})`).join('\n')
+    antiDuplicateSection = `
+ANTI-DOUBLON :
+Le carnet de recettes contient deja ces plats :
+${recipeList}
+Tu ne dois PAS proposer de recettes identiques ou trop similaires (meme plat avec variante mineure, meme base avec garniture differente).
+Privilegie la diversite culinaire.
+`
+  }
+
+  // Taste profile section
+  let tasteSection = ''
+  if (tasteProfile) {
+    const axisLabels = { sweetness: 'sucre', saltiness: 'sale', spiciness: 'epice', acidity: 'acidite', bitterness: 'amertume', umami: 'umami', richness: 'richesse' }
+    const axes = Object.entries(axisLabels)
+      .filter(([k]) => tasteProfile[k] != null)
+      .map(([k, label]) => `- Tolerance ${label}: ${tasteProfile[k]}/5`)
+      .join('\n')
+    const banned = tasteProfile.banned_ingredients?.length
+      ? `- Ingredients bannis: ${tasteProfile.banned_ingredients.join(', ')}`
+      : ''
+    const restrictions = tasteProfile.dietary_restrictions?.length
+      ? `- Restrictions: ${tasteProfile.dietary_restrictions.join(', ')}`
+      : ''
+    const notes = tasteProfile.notes ? `- Notes: ${tasteProfile.notes}` : ''
+
+    tasteSection = `
+PROFIL GUSTATIF DU FOYER :
+${axes}
+${banned}
+${restrictions}
+${notes}
+
+CONSIGNES PROFIL :
+- Ne propose JAMAIS de recettes contenant des ingredients bannis.
+- Respecte les restrictions alimentaires de TOUS les membres.
+- Adapte les niveaux d'epices/acidite au profil le plus sensible du foyer.
+- Si une recette contient un element sensible, propose une alternative ou une adaptation.
+`
+  }
+
+  // Split section
+  let splitSection = ''
+  if (invCount > 0 && discCount > 0) {
+    splitSection = `
+REPARTITION :
+- Genere ${invCount} recette(s) "inventaire" : realisables principalement avec les ingredients disponibles.
+- Genere ${discCount} recette(s) "decouverte" : recettes creatives ou originales, qui peuvent utiliser ou non les ingredients disponibles, privilegiant la variete et la surprise.
+`
+  } else if (discCount === 0) {
+    splitSection = `Genere exactement ${totalCount} recettes realisables principalement avec les ingredients disponibles.`
+  } else {
+    splitSection = `Genere exactement ${totalCount} recettes creatives et originales, sans contrainte d'ingredients disponibles.`
+  }
+
+  const prompt = `Tu es un chef cuisinier creatif. Voici les ingredients disponibles dans un foyer:
 
 ${ingredientList}
 
-${preferences ? `Préférences: ${preferences}` : ''}
+${preferences ? `Preferences: ${preferences}` : ''}
+${antiDuplicateSection}${tasteSection}${splitSection}
 
-Génère exactement 3 recettes réalisables principalement avec ces ingrédients (tu peux supposer la présence de condiments basiques: sel, poivre, huile, etc.).
-Priorise les ingrédients proches de la date de péremption.
+Priorise les ingredients proches de la date de peremption pour les recettes inventaire.
+Tu peux supposer la presence de condiments basiques: sel, poivre, huile, etc.
 
-Réponds UNIQUEMENT en JSON valide (pas de markdown), sous ce format exact:
+Reponds UNIQUEMENT en JSON valide (pas de markdown), sous ce format exact:
 {
   "recipes": [
     {
@@ -59,7 +123,7 @@ Réponds UNIQUEMENT en JSON valide (pas de markdown), sous ce format exact:
       "cook_time": 30,
       "servings": 4,
       "ingredients": [{"name": "ingredient", "quantity": 200, "unit": "g"}],
-      "steps": [{"instruction": "Étape détaillée", "duration_minutes": 5}],
+      "steps": [{"instruction": "Etape detaillee", "duration_minutes": 5}],
       "equipment": ["Four"],
       "tips": ["Astuce utile"],
       "translations": {
@@ -84,6 +148,7 @@ Réponds UNIQUEMENT en JSON valide (pas de markdown), sous ce format exact:
   ]
 }
 
+Genere exactement ${totalCount} recettes au total.
 Les champs principaux (name, description, ingredients, steps, tips) sont en ${langLabel}.
 Le champ "translations" contient les traductions en ${otherLangLabels}.
 Pour les traductions d'ingredients, garde le meme ordre et nombre que le tableau principal, avec seulement le champ "name" traduit.

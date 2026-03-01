@@ -1,15 +1,22 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { apiPost } from '../../lib/apiClient'
 import { logAI } from '../../lib/aiLogger'
+import { getTranslatedRecipe } from '../../lib/recipeTranslations'
 
 export default function SuggestPreviewModal({ recipes, onClose, onSave, onRetry, retrying }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const { profile } = useAuth()
   const [saved, setSaved] = useState(new Set())
   const [saving, setSaving] = useState(null)
   const [images, setImages] = useState({})
+
+  // Traduire les recettes selon la langue courante
+  const translatedRecipes = useMemo(
+    () => recipes?.map(r => getTranslatedRecipe(r, lang)) || [],
+    [recipes, lang]
+  )
 
   // Generer les images IA pour chaque recette
   useEffect(() => {
@@ -90,7 +97,7 @@ export default function SuggestPreviewModal({ recipes, onClose, onSave, onRetry,
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
-          {recipes.map((recipe, i) => (
+          {translatedRecipes.map((tr, i) => (
             <div key={i} className="bg-gray-50 rounded-xl overflow-hidden border border-gray-100">
               {/* Image IA */}
               <div className="relative w-full h-40 bg-gray-100">
@@ -99,7 +106,7 @@ export default function SuggestPreviewModal({ recipes, onClose, onSave, onRetry,
                     <div className="w-6 h-6 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
                   </div>
                 ) : images[i] ? (
-                  <img src={images[i]} alt={recipe.name} className="w-full h-full object-cover" />
+                  <img src={images[i]} alt={tr.name} className="w-full h-full object-cover" />
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center text-gray-300">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10">
@@ -110,25 +117,25 @@ export default function SuggestPreviewModal({ recipes, onClose, onSave, onRetry,
               </div>
 
               <div className="p-4">
-                <h3 className="font-semibold text-gray-900">{recipe.name}</h3>
-                {recipe.description && (
-                  <p className="text-sm text-gray-500 mt-1">{recipe.description}</p>
+                <h3 className="font-semibold text-gray-900">{tr.name}</h3>
+                {tr.description && (
+                  <p className="text-sm text-gray-500 mt-1">{tr.description}</p>
                 )}
                 <div className="flex flex-wrap gap-2 mt-2 text-xs text-gray-500">
-                  {recipe.difficulty && <span>{t(`recipeDifficulty.${recipe.difficulty}`)}</span>}
-                  {recipe.prep_time && <span>⏱ {recipe.prep_time + (recipe.cook_time || 0)} min</span>}
-                  {recipe.servings && <span>🍽 {recipe.servings}</span>}
+                  {tr.difficulty && <span>{t(`recipeDifficulty.${tr.difficulty}`)}</span>}
+                  {tr.prep_time && <span>⏱ {tr.prep_time + (tr.cook_time || 0)} min</span>}
+                  {tr.servings && <span>🍽 {tr.servings}</span>}
                 </div>
-                {recipe.ingredients?.length > 0 && (
+                {tr.ingredients?.length > 0 && (
                   <div className="mt-2">
                     <p className="text-xs font-medium text-gray-600">{t('recipes.ingredientsLabel')}:</p>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      {recipe.ingredients.map(ing => ing.name || ing).join(', ')}
+                      {tr.ingredients.map(ing => ing.name || ing).join(', ')}
                     </p>
                   </div>
                 )}
                 <button
-                  onClick={() => handleSave(recipe, i)}
+                  onClick={() => handleSave(recipes[i], i)}
                   disabled={saving === i || saved.has(i)}
                   className={`mt-3 w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors ${
                     saved.has(i)

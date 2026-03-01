@@ -14,6 +14,7 @@ import InventoryPage from './pages/InventoryPage'
 import RecipesPage from './pages/RecipesPage'
 import RecipeDetailPage from './pages/RecipeDetailPage'
 import AILogsPage from './pages/AILogsPage'
+import ProfilePage from './pages/ProfilePage'
 
 function App() {
   return (
@@ -73,6 +74,14 @@ function App() {
                 <Layout>
                   <ChatPage />
                 </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
               </ProtectedRoute>
             }
           />

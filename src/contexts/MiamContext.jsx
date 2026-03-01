@@ -482,6 +482,33 @@ export function MiamProvider({ children }) {
       return error ? { success: false, error: error.message } : { success: true }
     }
 
+    // Built-in: updateTasteProfile
+    if (name === 'updateTasteProfile') {
+      if (!profile?.id) return { success: false, error: 'No profile' }
+      // Fetch current preferences
+      const { data: existing } = await supabase
+        .from('taste_preferences')
+        .select('*')
+        .eq('profile_id', profile.id)
+        .single()
+      const axes = ['sweetness', 'saltiness', 'spiciness', 'acidity', 'bitterness', 'umami', 'richness']
+      const payload = { profile_id: profile.id, updated_at: new Date().toISOString() }
+      for (const axis of axes) {
+        if (args[axis] != null) {
+          const currentVal = existing?.[axis] ?? 3
+          // Incremental adjustment: clamp between 1 and 5, max ±0.5 from current
+          const target = Math.min(5, Math.max(1, Math.round(args[axis])))
+          const delta = target - currentVal
+          const clampedDelta = Math.min(0.5, Math.max(-0.5, delta))
+          payload[axis] = Math.round(Math.min(5, Math.max(1, currentVal + clampedDelta)))
+        }
+      }
+      const { error } = await supabase
+        .from('taste_preferences')
+        .upsert(payload, { onConflict: 'profile_id' })
+      return error ? { success: false, error: error.message } : { success: true }
+    }
+
     // Built-in: suggestRecipes
     if (name === 'suggestRecipes') {
       if (!profile?.household_id) return { success: false, error: 'No profile' }
@@ -520,6 +547,17 @@ export function MiamProvider({ children }) {
     return { success: false, error: `Unknown action: ${name}` }
   }, [navigate, profile])
 
+  // Fetch current user's taste profile for Miam context
+  const fetchTasteProfile = useCallback(async () => {
+    if (!profile?.id) return null
+    const { data } = await supabase
+      .from('taste_preferences')
+      .select('sweetness, saltiness, spiciness, acidity, bitterness, umami, richness, banned_ingredients, dietary_restrictions, additional_notes')
+      .eq('profile_id', profile.id)
+      .single()
+    return data || null
+  }, [profile?.id])
+
   // Send message to orchestrator
   const sendMessage = useCallback(async (text) => {
     if (!text.trim() || isLoading) return
@@ -534,6 +572,7 @@ export function MiamProvider({ children }) {
 
     try {
       const dynamicContext = collectContext()
+      const tasteProfile = await fetchTasteProfile()
 
       const res = await apiPost('/api/miam-orchestrator', {
         message: text,
@@ -545,6 +584,7 @@ export function MiamProvider({ children }) {
           profileName: profile?.display_name,
           householdId: profile?.household_id,
           householdMembers,
+          tasteProfile,
           ...dynamicContext,
         },
       })
@@ -621,7 +661,7 @@ export function MiamProvider({ children }) {
     } finally {
       setIsLoading(false)
     }
-  }, [isLoading, lang, getCurrentPage, getAvailableActions, messages, profile, householdMembers, collectContext, executeAction, speak, t])
+  }, [isLoading, lang, getCurrentPage, getAvailableActions, messages, profile, householdMembers, collectContext, fetchTasteProfile, executeAction, speak, t])
 
   // Synchroniser sendMessageRef (doit être après la définition de sendMessage)
   useEffect(() => {

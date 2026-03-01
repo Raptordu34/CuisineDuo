@@ -47,6 +47,7 @@ function ActionChip({ action, t }) {
     addRecipeTip: t('miam.action.addRecipeTip', { name: action.args?.name || '' }),
     updateRecipeInfo: t('miam.action.updateRecipeInfo', { name: action.args?.name || '' }),
     suggestRecipes: t('miam.action.suggestRecipes'),
+    updateTasteProfile: t('miam.action.updateTasteProfile'),
   }
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 text-xs">

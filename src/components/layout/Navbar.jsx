@@ -67,9 +67,9 @@ export default function Navbar() {
 
           <div className="flex items-center gap-1">
             <LanguageSwitcher />
-            <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-sm font-bold">
+            <Link to="/profile" className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-sm font-bold hover:bg-orange-600 transition-colors">
               {initial}
-            </div>
+            </Link>
             <button
               onClick={signOut}
               className="text-xs text-gray-400 hover:text-red-500 transition-colors cursor-pointer ml-1"
@@ -159,9 +159,9 @@ export default function Navbar() {
           <div className="flex items-center gap-3">
             <LanguageSwitcher />
             <span className="text-sm text-gray-600">{profile?.display_name}</span>
-            <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-sm font-bold">
+            <Link to="/profile" className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white text-sm font-bold hover:bg-orange-600 transition-colors">
               {initial}
-            </div>
+            </Link>
             <button
               onClick={signOut}
               className="text-xs text-gray-400 hover:text-red-500 transition-colors cursor-pointer"

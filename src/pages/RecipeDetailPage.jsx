@@ -194,13 +194,33 @@ export default function RecipeDetailPage() {
     setTimer({ stepIndex, totalSeconds: minutes * 60, remainingSeconds: minutes * 60, paused: false })
   }
 
-  const handleRate = async (rating) => {
+  const handleRate = async (rating, comment) => {
+    // Optimistic UI : mettre a jour l'affichage immediatement
+    setRatings(prev => {
+      const existing = prev.findIndex(r => r.profile_id === profile.id)
+      if (existing >= 0) {
+        const updated = [...prev]
+        updated[existing] = { ...updated[existing], rating }
+        return updated
+      }
+      return [...prev, { id: crypto.randomUUID(), recipe_id: id, profile_id: profile.id, rating }]
+    })
+
     await supabase.from('recipe_ratings').upsert({
       recipe_id: id,
       profile_id: profile.id,
       rating,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'recipe_id,profile_id' })
+
+    // Sauvegarder le commentaire si fourni
+    if (comment) {
+      await supabase.from('recipe_comments').insert({
+        recipe_id: id,
+        profile_id: profile.id,
+        content: comment,
+      })
+    }
   }
 
   const handleComment = async (content) => {
@@ -209,6 +229,23 @@ export default function RecipeDetailPage() {
       profile_id: profile.id,
       content,
     })
+  }
+
+  const handleEditComment = async (commentId, content) => {
+    // Optimistic UI
+    setComments(prev => prev.map(c =>
+      c.id === commentId ? { ...c, content, edited_at: new Date().toISOString() } : c
+    ))
+    await supabase.from('recipe_comments').update({
+      content,
+      edited_at: new Date().toISOString(),
+    }).eq('id', commentId)
+  }
+
+  const handleDeleteComment = async (commentId) => {
+    // Optimistic UI
+    setComments(prev => prev.filter(c => c.id !== commentId))
+    await supabase.from('recipe_comments').delete().eq('id', commentId)
   }
 
   const handleCook = async ({ servingsCooked, notes, deductions }) => {
@@ -434,8 +471,11 @@ export default function RecipeDetailPage() {
         <div className="px-4 pb-4">
           <RatingSection
             ratings={ratings}
+            comments={comments}
             currentUserId={profile?.id}
             onRate={handleRate}
+            onEditComment={handleEditComment}
+            onDeleteComment={handleDeleteComment}
           />
         </div>
 
@@ -443,7 +483,10 @@ export default function RecipeDetailPage() {
         <div className="px-4 pb-4">
           <CommentsSection
             comments={comments}
+            currentUserId={profile?.id}
             onComment={handleComment}
+            onEditComment={handleEditComment}
+            onDeleteComment={handleDeleteComment}
           />
         </div>
 
