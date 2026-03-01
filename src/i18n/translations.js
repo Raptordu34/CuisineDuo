@@ -238,6 +238,13 @@ export const translations = {
     'offline.updateAvailable': 'Une mise a jour est disponible.',
     'offline.updateNow': 'Mettre a jour',
     'offline.dismiss': 'Plus tard',
+    'offline.recipeBanner': 'Mode hors ligne — {{count}} recette(s) en cache',
+    'offline.featureDisabled': 'Non disponible hors ligne',
+    'offline.pendingSync': 'Non synchronise',
+    'offline.syncSuccess': 'Modifications synchronisees',
+    'offline.syncFailed': 'Echec de synchronisation de certaines modifications',
+    'offline.editHint': 'Les modifications seront synchronisees au retour en ligne',
+    'offline.createOnlineOnly': 'La creation de recettes necessite une connexion',
 
     // Miam Orchestrator
     'miam.fab.tooltip': 'Parler a Miam',
@@ -686,6 +693,13 @@ export const translations = {
     'offline.updateAvailable': 'An update is available.',
     'offline.updateNow': 'Update',
     'offline.dismiss': 'Later',
+    'offline.recipeBanner': 'Offline mode — {{count}} recipe(s) cached',
+    'offline.featureDisabled': 'Not available offline',
+    'offline.pendingSync': 'Not synced',
+    'offline.syncSuccess': 'Changes synced',
+    'offline.syncFailed': 'Some changes failed to sync',
+    'offline.editHint': 'Changes will be synced when back online',
+    'offline.createOnlineOnly': 'Creating recipes requires an internet connection',
 
     // Miam Orchestrator
     'miam.fab.tooltip': 'Talk to Miam',
@@ -1134,6 +1148,13 @@ export const translations = {
     'offline.updateAvailable': '\u6709\u53ef\u7528\u7684\u66f4\u65b0\u3002',
     'offline.updateNow': '\u66f4\u65b0',
     'offline.dismiss': '\u7a0d\u540e',
+    'offline.recipeBanner': '\u79bb\u7ebf\u6a21\u5f0f\u2014\u2014\u5df2\u7f13\u5b58 {{count}} \u4e2a\u98df\u8c31',
+    'offline.featureDisabled': '\u79bb\u7ebf\u4e0d\u53ef\u7528',
+    'offline.pendingSync': '\u672a\u540c\u6b65',
+    'offline.syncSuccess': '\u4fee\u6539\u5df2\u540c\u6b65',
+    'offline.syncFailed': '\u90e8\u5206\u4fee\u6539\u540c\u6b65\u5931\u8d25',
+    'offline.editHint': '\u4fee\u6539\u5c06\u5728\u8054\u7f51\u540e\u540c\u6b65',
+    'offline.createOnlineOnly': '\u521b\u5efa\u98df\u8c31\u9700\u8981\u7f51\u7edc\u8fde\u63a5',
 
     // Miam Orchestrator
     'miam.fab.tooltip': '\u548cMiam\u804a\u5929',

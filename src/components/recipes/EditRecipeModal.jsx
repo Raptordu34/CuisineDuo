@@ -7,7 +7,7 @@ const CATEGORIES = ['appetizer', 'main', 'dessert', 'snack', 'drink', 'other']
 const DIFFICULTIES = ['easy', 'medium', 'hard']
 const UNITS = ['piece', 'g', 'kg', 'ml', 'l', 'tbsp', 'tsp', 'cup']
 
-export default function EditRecipeModal({ recipe, onClose, onSave, onDelete }) {
+export default function EditRecipeModal({ recipe, isOffline, onClose, onSave, onDelete }) {
   const { t } = useLanguage()
   const [name, setName] = useState(recipe.name || '')
   const [description, setDescription] = useState(recipe.description || '')
@@ -159,6 +159,11 @@ export default function EditRecipeModal({ recipe, onClose, onSave, onDelete }) {
 
         {/* Form — same structure as AddRecipeModal */}
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+          {isOffline && (
+            <div className="px-3 py-2 bg-orange-50 border border-orange-200 rounded-xl text-xs text-orange-700">
+              {t('offline.editHint')}
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">{t('recipes.name')} *</label>
             <input type="text" value={name} onChange={e => setName(e.target.value)}
@@ -222,7 +227,8 @@ export default function EditRecipeModal({ recipe, onClose, onSave, onDelete }) {
                 {uploading ? '...' : t('recipes.upload')}
                 <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
               </label>
-              <button onClick={handleGenerateImage} disabled={generatingImage || !name}
+              <button onClick={handleGenerateImage} disabled={generatingImage || !name || isOffline}
+                title={isOffline ? t('offline.featureDisabled') : undefined}
                 className="flex items-center gap-1 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50 rounded-lg text-xs font-medium text-indigo-600 cursor-pointer transition-colors">
                 {generatingImage ? '...' : t('recipes.generateImage')}
               </button>

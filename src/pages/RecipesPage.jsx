@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useMiamActions } from '../hooks/useMiamActions'
 import { useMiam } from '../contexts/MiamContext'
+import useOfflineRecipes from '../hooks/useOfflineRecipes'
 import RecipeCard from '../components/recipes/RecipeCard'
 import RecipeCategoryFilter from '../components/recipes/RecipeCategoryFilter'
 import AddRecipeModal from '../components/recipes/AddRecipeModal'
@@ -14,29 +15,18 @@ import SuggestConfigModal from '../components/recipes/SuggestConfigModal'
 import { apiPost } from '../lib/apiClient'
 import { logAI } from '../lib/aiLogger'
 
-const RECIPES_CACHE_KEY = 'cuisineduo_recipes'
 const SUGGEST_TIMEOUT_MS = 55000
-
-function getCachedRecipes(householdId) {
-  try {
-    const raw = localStorage.getItem(`${RECIPES_CACHE_KEY}_${householdId}`)
-    return raw ? JSON.parse(raw) : []
-  } catch { return [] }
-}
-
-function setCachedRecipes(householdId, items) {
-  try {
-    localStorage.setItem(`${RECIPES_CACHE_KEY}_${householdId}`, JSON.stringify(items))
-  } catch { /* ignore */ }
-}
 
 export default function RecipesPage() {
   const { profile } = useAuth()
   const { t, lang } = useLanguage()
   const { registerContextProvider } = useMiam()
   const navigate = useNavigate()
+  const {
+    recipes, saveRecipe, deleteRecipe: deleteRecipeOffline,
+    pendingSyncIds, isOffline, refreshFromServer,
+  } = useOfflineRecipes(profile?.household_id)
 
-  const [recipes, setRecipes] = useState(() => getCachedRecipes(profile?.household_id))
   const [inventoryItems, setInventoryItems] = useState([])
   const [category, setCategory] = useState('all')
   const [difficulty, setDifficulty] = useState('all')
@@ -72,23 +62,9 @@ export default function RecipesPage() {
     )
   }, [registerContextProvider, recipes])
 
-  // Fetch recipes
+  // Realtime: refresh from server on recipe changes
   useEffect(() => {
     if (!profile?.household_id) return
-
-    const fetchRecipes = async () => {
-      const { data } = await supabase
-        .from('recipes')
-        .select('*, recipe_ratings(rating, profile_id), cooking_history(cooked_at)')
-        .eq('household_id', profile.household_id)
-        .order('created_at', { ascending: false })
-      if (data) {
-        setRecipes(data)
-        setCachedRecipes(profile.household_id, data)
-      }
-    }
-
-    fetchRecipes()
 
     const channel = supabase
       .channel(`recipes:${profile.household_id}`)
@@ -100,12 +76,12 @@ export default function RecipesPage() {
           table: 'recipes',
           filter: `household_id=eq.${profile.household_id}`,
         },
-        () => fetchRecipes()
+        () => refreshFromServer()
       )
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [profile?.household_id])
+  }, [profile?.household_id, refreshFromServer])
 
   // Fetch inventory for "feasible" badges
   useEffect(() => {
@@ -127,12 +103,12 @@ export default function RecipesPage() {
   }
 
   const handleEdit = async (id, updates) => {
-    await supabase.from('recipes').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', id)
+    await saveRecipe(id, updates)
     setEditingRecipe(null)
   }
 
   const handleDelete = async (id) => {
-    await supabase.from('recipes').delete().eq('id', id)
+    await deleteRecipeOffline(id)
     setEditingRecipe(null)
   }
 
@@ -325,7 +301,8 @@ export default function RecipesPage() {
         <div className="flex gap-1.5 shrink-0">
           <button
             onClick={() => setShowSuggestConfig(true)}
-            disabled={suggesting}
+            disabled={suggesting || isOffline}
+            title={isOffline ? t('offline.featureDisabled') : undefined}
             className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-full text-xs font-medium transition-colors cursor-pointer"
           >
             {suggesting ? (
@@ -339,7 +316,9 @@ export default function RecipesPage() {
           </button>
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-1 px-2.5 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-full text-xs font-medium transition-colors cursor-pointer"
+            disabled={isOffline}
+            title={isOffline ? t('offline.createOnlineOnly') : undefined}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white rounded-full text-xs font-medium transition-colors cursor-pointer"
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -348,6 +327,18 @@ export default function RecipesPage() {
           </button>
         </div>
       </div>
+
+      {/* Offline banner */}
+      {isOffline && (
+        <div className="shrink-0 mx-3 mb-2 px-3 py-2 bg-orange-50 border border-orange-200 rounded-xl flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-orange-500 shrink-0">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 3l8.735 8.735m0 0a.374.374 0 11.53.53m-.53-.53l.53.53m0 0L21 21M14.652 9.348a3.75 3.75 0 010 5.304m2.121-7.425a6.75 6.75 0 010 9.546m2.121-11.667C21.16 7.371 22.5 9.98 22.5 12.817c0 2.837-1.34 5.446-3.606 7.217" />
+          </svg>
+          <span className="text-xs text-orange-700 flex-1">
+            {t('offline.recipeBanner', { count: recipes.length })}
+          </span>
+        </div>
+      )}
 
       {/* Suggest error banner */}
       {suggestError && (
@@ -415,6 +406,7 @@ export default function RecipesPage() {
                 key={recipe.id}
                 recipe={recipe}
                 feasibility={computeFeasibility(recipe)}
+                pendingSync={pendingSyncIds.has(recipe.id)}
                 onClick={() => navigate(`/recipes/${recipe.id}`)}
                 onEdit={() => setEditingRecipe(recipe)}
               />
@@ -434,6 +426,7 @@ export default function RecipesPage() {
       {editingRecipe && (
         <EditRecipeModal
           recipe={editingRecipe}
+          isOffline={isOffline}
           onClose={() => setEditingRecipe(null)}
           onSave={handleEdit}
           onDelete={handleDelete}

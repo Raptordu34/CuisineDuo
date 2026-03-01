@@ -5,6 +5,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useMiamActions } from '../hooks/useMiamActions'
 import { useMiam } from '../contexts/MiamContext'
+import useOnlineStatus from '../hooks/useOnlineStatus'
+import { getRecipe as getRecipeFromIDB, putRecipe as putRecipeToIDB, addToSyncQueue } from '../lib/offlineRecipeStore'
 import { getTranslatedRecipe } from '../lib/recipeTranslations'
 import IngredientsList from '../components/recipes/IngredientsList'
 import StepsList from '../components/recipes/StepsList'
@@ -36,6 +38,8 @@ export default function RecipeDetailPage() {
   const { profile } = useAuth()
   const { t, lang } = useLanguage()
   const { registerContextProvider } = useMiam()
+  const onlineStatus = useOnlineStatus()
+  const isOffline = onlineStatus === 'offline'
 
   const [recipe, setRecipe] = useState(null)
   const [ratings, setRatings] = useState([])
@@ -93,14 +97,25 @@ export default function RecipeDetailPage() {
     }))
   }, [registerContextProvider, recipe])
 
-  // Fetch recipe data
+  // Fetch recipe data with offline fallback
   const fetchRecipe = useCallback(async () => {
-    const { data } = await supabase
-      .from('recipes')
-      .select('*')
-      .eq('id', id)
-      .single()
-    if (data) setRecipe(data)
+    try {
+      const { data, error } = await supabase
+        .from('recipes')
+        .select('*')
+        .eq('id', id)
+        .single()
+      if (data) {
+        setRecipe(data)
+        setLoading(false)
+        return
+      }
+      if (error) throw error
+    } catch {
+      // Fallback : charger depuis IndexedDB
+      const cached = await getRecipeFromIDB(id)
+      if (cached) setRecipe(cached)
+    }
     setLoading(false)
   }, [id])
 
@@ -297,9 +312,30 @@ export default function RecipeDetailPage() {
   }
 
   const handleEditSave = async (recipeId, updates) => {
-    await supabase.from('recipes').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', recipeId)
+    const updatedAt = new Date().toISOString()
+
+    // Mise a jour optimiste
+    setRecipe(prev => prev ? { ...prev, ...updates, updated_at: updatedAt } : prev)
+
+    // Persister dans IDB
+    const existing = await getRecipeFromIDB(recipeId)
+    if (existing) {
+      await putRecipeToIDB({ ...existing, ...updates, updated_at: updatedAt })
+    }
+
+    if (isOffline) {
+      await addToSyncQueue({ type: 'update', recipeId, payload: updates })
+    } else {
+      const { error } = await supabase
+        .from('recipes')
+        .update({ ...updates, updated_at: updatedAt })
+        .eq('id', recipeId)
+      if (error) {
+        await addToSyncQueue({ type: 'update', recipeId, payload: updates })
+      }
+    }
+
     setShowEditModal(false)
-    fetchRecipe()
   }
 
   const handleDeleteRecipe = async (recipeId) => {
@@ -350,6 +386,11 @@ export default function RecipeDetailPage() {
             </svg>
           </button>
           <div className="absolute top-3 right-3 flex gap-2">
+            {isOffline && (
+              <span className="px-2.5 py-1 rounded-full bg-orange-500/90 backdrop-blur text-white text-xs font-medium">
+                {t('offline.featureDisabled')}
+              </span>
+            )}
             <button
               onClick={() => setShowEditModal(true)}
               className="p-2 rounded-full bg-white/80 backdrop-blur text-gray-700 hover:bg-white transition-colors cursor-pointer"
@@ -410,7 +451,9 @@ export default function RecipeDetailPage() {
         <div className="px-4 pb-3">
           <button
             onClick={() => setShowCookModal(true)}
-            className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium transition-colors cursor-pointer"
+            disabled={isOffline}
+            title={isOffline ? t('offline.featureDisabled') : undefined}
+            className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white rounded-xl text-sm font-medium transition-colors cursor-pointer"
           >
             {t('recipes.cookedButton')}
           </button>
@@ -468,7 +511,7 @@ export default function RecipeDetailPage() {
         )}
 
         {/* Ratings */}
-        <div className="px-4 pb-4">
+        <div className={`px-4 pb-4 ${isOffline ? 'opacity-50 pointer-events-none' : ''}`}>
           <RatingSection
             ratings={ratings}
             comments={comments}
@@ -480,7 +523,7 @@ export default function RecipeDetailPage() {
         </div>
 
         {/* Comments */}
-        <div className="px-4 pb-4">
+        <div className={`px-4 pb-4 ${isOffline ? 'opacity-50 pointer-events-none' : ''}`}>
           <CommentsSection
             comments={comments}
             currentUserId={profile?.id}
@@ -522,6 +565,7 @@ export default function RecipeDetailPage() {
       {showEditModal && (
         <EditRecipeModal
           recipe={recipe}
+          isOffline={isOffline}
           onClose={() => setShowEditModal(false)}
           onSave={handleEditSave}
           onDelete={handleDeleteRecipe}
